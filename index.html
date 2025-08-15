@@ -785,7 +785,7 @@
 
             const ttlDisplay =
               item.ttl !== null
-                ? `<span class="ttl-badge ttl-active">${item.ttl}s</span>`
+                ? `<span class="ttl-badge ttl-active">${escapeHtml(String(item.ttl))}s</span>`
                 : `<span class="ttl-badge ttl-none">∞</span>`;
 
             row.innerHTML = `

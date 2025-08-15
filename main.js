@@ -145,7 +145,23 @@ class MiniRedisServer {
   // Serve static files
   serveFile(res, filename, contentType) {
     try {
+      // Validate filename to prevent directory traversal
+      if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+        res.writeHead(400);
+        res.end("Invalid filename");
+        return;
+      }
+
       const filePath = path.join(__dirname, filename);
+      // Additional safety: ensure resolved path is within __dirname
+      const resolvedPath = path.resolve(filePath);
+      const baseDir = path.resolve(__dirname);
+      if (!resolvedPath.startsWith(baseDir)) {
+        res.writeHead(400);
+        res.end("Invalid file path");
+        return;
+      }
+
       const content = fs.readFileSync(filePath, "utf8");
       res.writeHead(200, { "Content-Type": contentType });
       res.end(content);
