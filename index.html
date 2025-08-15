@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mini Redis Insight</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #f8f9fa;
+        color: #333;
+        line-height: 1.6;
+      }
+
+      .header {
+        background: #fff;
+        border-bottom: 1px solid #e9ecef;
+        padding: 1rem 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0 1rem;
+      }
+
+      .header h1 {
+        color: #dc3545;
+        font-size: 2rem;
+        font-weight: 700;
+      }
+
+      .header .subtitle {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-top: 0.25rem;
+      }
+
+      .main-content {
+        padding: 2rem 0;
+      }
+
+      .tabs {
+        display: flex;
+        background: #fff;
+        border-top-left-radius: 8px;
+        border-top-right-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+      }
+
+      .tab {
+        flex: 1;
+        padding: 1rem;
+        text-align: center;
+        background: #f8f9fa;
+        border: none;
+        cursor: pointer;
+        font-size: 1rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+      }
+
+      .tab.active {
+        background: #dc3545;
+        color: white;
+      }
+
+      .tab:hover:not(.active) {
+        background: #e9ecef;
+      }
+
+      .tab-content {
+        display: none;
+        background: #fff;
+        border-bottom-left-radius: 8px;
+        border-bottom-right-radius: 8px;
+        padding: 2rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      .tab-content.active {
+        display: block;
+      }
+
+      .data-commands-grid {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 2rem;
+        height: 100%;
+      }
+
+      .data-section {
+        min-height: 500px;
+      }
+
+      .command-section {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1.5rem;
+        min-height: 500px;
+      }
+
+      .command-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .command-controls > div {
+        display: flex;
+        align-items: center;
+      }
+
+      .command-controls label {
+        display: block;
+        font-weight: 500;
+        margin-bottom: 0.25rem;
+        color: #495057;
+        width: 80px;
+      }
+
+      .command-controls input,
+      .command-controls select {
+        padding: 0.5rem;
+        border: 2px solid #e9ecef;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        flex: 1;
+      }
+
+      .command-controls input:focus,
+      .command-controls select:focus {
+        outline: none;
+        border-color: #dc3545;
+      }
+
+      .command-controls .hidden {
+        display: none;
+      }
+
+      .data-table-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+      }
+
+      .data-table-actions {
+        display: flex;
+        gap: 1rem;
+      }
+
+      .status-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        background: #e9ecef;
+        padding: 1rem;
+        border-radius: 6px;
+        margin-bottom: 2rem;
+        font-size: 0.9rem;
+      }
+
+      .status-indicator {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #28a745;
+      }
+
+      .command-input {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
+
+      .command-input input {
+        flex: 1;
+        padding: 0.75rem;
+        border: 2px solid #e9ecef;
+        border-radius: 6px;
+        font-size: 1rem;
+        font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+      }
+
+      .command-input input:focus {
+        outline: none;
+        border-color: #dc3545;
+      }
+
+      .btn {
+        padding: 0.75rem 1.5rem;
+        border: none;
+        border-radius: 6px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .btn-primary {
+        background: #dc3545;
+        color: white;
+      }
+
+      .btn-primary:hover {
+        background: #c82333;
+      }
+
+      .btn-secondary {
+        background: #6c757d;
+        color: white;
+      }
+
+      .btn-secondary:hover {
+        background: #5a6268;
+      }
+
+      .btn-danger {
+        background: #dc3545;
+        color: white;
+      }
+
+      .btn-danger:hover {
+        background: #c82333;
+      }
+
+      .command-result {
+        background: #ffffff;
+        border: 2px solid #e9ecef;
+        border-radius: 6px;
+        padding: 1rem;
+        font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+        font-size: 0.9rem;
+        white-space: pre-wrap;
+        min-height: 100px;
+        max-height: 400px;
+        overflow-y: auto;
+      }
+
+      .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+      }
+
+      .data-table th,
+      .data-table td {
+        padding: 1rem;
+        text-align: left;
+        border-bottom: 1px solid #e9ecef;
+      }
+
+      .data-table th {
+        background: #f8f9fa;
+        font-weight: 600;
+        color: #495057;
+      }
+
+      .data-table tr:hover {
+        background: #f8f9fa;
+      }
+
+      .ttl-badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 500;
+      }
+
+      .ttl-active {
+        background: #fff3cd;
+        color: #856404;
+      }
+
+      .ttl-none {
+        background: #d1ecf1;
+        color: #0c5460;
+      }
+
+      .key-actions {
+        display: flex;
+        gap: 0.5rem;
+      }
+
+      .key-actions button {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.8rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      .pubsub-section {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+      }
+
+      .channel-list {
+        background: #f8f9fa;
+        border-radius: 6px;
+        padding: 1rem;
+        max-height: 300px;
+        overflow-y: auto;
+      }
+
+      .channel-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem;
+        border-bottom: 1px solid #e9ecef;
+      }
+
+      .channel-item:last-child {
+        border-bottom: none;
+      }
+
+      .subscriber-count {
+        background: #dc3545;
+        color: white;
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-size: 0.8rem;
+      }
+
+      .message-log {
+        background: #f8f9fa;
+        border-radius: 6px;
+        padding: 1rem;
+        max-height: 300px;
+        overflow-y: auto;
+        font-family: "Monaco", "Menlo", "Ubuntu Mono", monospace;
+        font-size: 0.9rem;
+      }
+
+      .message-item {
+        padding: 0.5rem;
+        border-bottom: 1px solid #e9ecef;
+        margin-bottom: 0.5rem;
+      }
+
+      .message-timestamp {
+        color: #6c757d;
+        font-size: 0.8rem;
+      }
+
+      .loading {
+        text-align: center;
+        padding: 2rem;
+        color: #6c757d;
+      }
+
+      .error {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 1rem;
+        border-radius: 6px;
+        margin-bottom: 1rem;
+      }
+
+      .success {
+        background: #d4edda;
+        color: #155724;
+        padding: 1rem;
+        border-radius: 6px;
+        margin-bottom: 1rem;
+      }
+
+      #footer {
+        background: #fff;
+        border-top: 1px solid #e9ecef;
+        padding: 2rem 0;
+        margin-top: 3rem;
+        text-align: center;
+        box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.1);
+      }
+
+      #footer p {
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin: 0;
+        line-height: 1.5;
+      }
+
+      #footer a {
+        color: #dc3545;
+        text-decoration: none;
+        font-weight: 500;
+        transition: color 0.3s ease;
+      }
+
+      #footer a:hover {
+        color: #c82333;
+        text-decoration: underline;
+      }
+
+      @media (max-width: 768px) {
+        .pubsub-section {
+          grid-template-columns: 1fr;
+        }
+
+        .data-commands-grid {
+          grid-template-columns: 1fr;
+          gap: 1rem;
+        }
+
+        .data-table-header {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 1rem;
+        }
+
+        .data-table-actions {
+          width: 100%;
+          justify-content: space-between;
+        }
+
+        .command-section {
+          margin-top: 1rem;
+        }
+
+        #footer {
+          padding: 1.5rem 0;
+          margin-top: 2rem;
+        }
+
+        #footer p {
+          font-size: 0.8rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="container">
+        <h1>🎲 Mini Redis Insight</h1>
+        <div class="subtitle">Real-time Redis management interface</div>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="main-content">
+        <!-- Status Bar -->
+        <div class="status-bar">
+          <div class="status-indicator">
+            <div class="status-dot" id="connection-status"></div>
+            <span id="connection-text">Connected</span>
+          </div>
+          <div>
+            <span id="key-count">0 keys</span> |
+            <span id="last-update">Never updated</span>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab active" onclick="switchTab('data')">📊 Data & Commands</button>
+          <button class="tab" onclick="switchTab('pubsub')">📡 Pub/Sub</button>
+        </div>
+
+        <!-- Data & Commands Tab -->
+        <div id="data-tab" class="tab-content active">
+          <div class="data-commands-grid">
+            <!-- Data Section (Left - 2/3 width) -->
+            <div class="data-section">
+              <div class="data-table-header">
+                <h2>Key-Value Store</h2>
+                <div class="data-table-actions">
+                  <button class="btn btn-secondary" onclick="loadData()">Refresh</button>
+                  <button class="btn btn-danger" onclick="clearAllData()">Clear All Data</button>
+                </div>
+              </div>
+
+              <div id="data-loading" class="loading">Loading data...</div>
+              <div id="data-error" class="error" style="display: none"></div>
+
+              <table class="data-table" id="data-table" style="display: none">
+                <thead>
+                  <tr>
+                    <th>Key</th>
+                    <th>Value</th>
+                    <th>Type</th>
+                    <th>TTL</th>
+                  </tr>
+                </thead>
+                <tbody id="data-table-body"></tbody>
+              </table>
+
+              <div id="no-data" style="display: none; text-align: center; padding: 2rem; color: #6c757d">
+                No keys found. Use the command interface to add some data.
+              </div>
+            </div>
+
+            <!-- Command Section (Right - 1/3 width) -->
+            <div class="command-section">
+              <h3>Execute Commands</h3>
+
+              <div class="command-controls">
+                <div>
+                  <label for="command-action">Action:</label>
+                  <select id="command-action" onchange="handleActionChange()">
+                    <option value="PING">PING</option>
+                    <option value="GET">GET</option>
+                    <option value="SET">SET</option>
+                    <option value="DELETE">DELETE</option>
+                    <option value="SET_TTL">SET with TTL</option>
+                  </select>
+                </div>
+
+                <div id="key-input-group">
+                  <label for="command-key">Key:</label>
+                  <input type="text" id="command-key" placeholder="Enter key name" />
+                </div>
+
+                <div id="value-input-group" class="hidden">
+                  <label for="command-value">Value:</label>
+                  <input type="text" id="command-value" placeholder="Enter value" />
+                </div>
+
+                <div id="ttl-input-group" class="hidden">
+                  <label for="command-ttl">TTL (sec):</label>
+                  <input type="number" id="command-ttl" placeholder="Enter TTL in seconds" min="1" />
+                </div>
+
+                <button class="btn btn-primary" onclick="executeCommand()">Execute</button>
+              </div>
+
+              <div id="command-error" class="error" style="display: none"></div>
+              <div id="command-success" class="success" style="display: none"></div>
+
+              <div class="command-result" id="command-result">
+                Ready to execute commands... Examples: - PING: Test connection - GET: Retrieve a key's value - SET:
+                Store a key-value pair - DELETE: Remove a key - SET with TTL: Store with expiration
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pub/Sub Tab -->
+        <div id="pubsub-tab" class="tab-content">
+          <h2>Publish/Subscribe Monitor</h2>
+
+          <div class="pubsub-section">
+            <div>
+              <h3>Active Channels</h3>
+              <div class="channel-list" id="channel-list">
+                <div style="text-align: center; color: #6c757d; padding: 2rem">No active channels</div>
+              </div>
+            </div>
+
+            <div>
+              <h3>Message Log</h3>
+              <div class="message-log" id="message-log">
+                <div style="text-align: center; color: #6c757d; padding: 2rem">No messages yet</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top: 2rem">
+            <h3>Test Pub/Sub</h3>
+            <div style="display: flex; gap: 1rem; margin-top: 1rem">
+              <button class="btn btn-secondary" onclick="quickCommand('SUBSCRIBE test_channel')">
+                Subscribe to test_channel
+              </button>
+              <button class="btn btn-secondary" onclick="quickCommand('PUBLISH test_channel &quot;Hello World&quot;')">
+                Publish Test Message
+              </button>
+              <button class="btn btn-secondary" onclick="quickCommand('UNSUBSCRIBE test_channel')">Unsubscribe</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer id="footer">
+      <div>
+        <p>© Copyright 2025, MIT License | <a href="https://github.com/EricNguyen1206">EricNguyen1206</a></p>
+      </div>
+    </footer>
+
+    <script>
+      // Global state
+      let currentTab = "data";
+      let websocket = null;
+      let messageLog = [];
+      let isConnected = false;
+
+      // Initialize the application
+      document.addEventListener("DOMContentLoaded", function () {
+        initializeWebSocket();
+        loadData();
+        loadPubSubData();
+
+        // Auto-refresh data every 5 seconds as fallback
+        setInterval(() => {
+          if (!isConnected) {
+            loadData();
+            loadPubSubData();
+          }
+        }, 5000);
+      });
+
+      // WebSocket connection for real-time updates
+      function initializeWebSocket() {
+        try {
+          const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+          const wsUrl = `${protocol}//${window.location.host}`;
+          websocket = new WebSocket(wsUrl);
+
+          websocket.onopen = function () {
+            isConnected = true;
+            updateConnectionStatus(true);
+          };
+
+          websocket.onmessage = function (event) {
+            try {
+              const data = JSON.parse(event.data);
+              if (data.type === "data_update") {
+                updateDataTable(data.data);
+              }
+            } catch (error) {
+              console.error("WebSocket message error:", error);
+            }
+          };
+
+          websocket.onclose = function () {
+            isConnected = false;
+            updateConnectionStatus(false);
+            // Try to reconnect after 3 seconds
+            setTimeout(initializeWebSocket, 3000);
+          };
+
+          websocket.onerror = function (error) {
+            console.error("WebSocket error:", error);
+            isConnected = false;
+            updateConnectionStatus(false);
+          };
+        } catch (error) {
+          console.error("WebSocket initialization error:", error);
+          isConnected = false;
+          updateConnectionStatus(false);
+        }
+      }
+
+      // Update connection status indicator
+      function updateConnectionStatus(connected) {
+        const statusDot = document.getElementById("connection-status");
+        const statusText = document.getElementById("connection-text");
+
+        if (connected) {
+          statusDot.style.background = "#28a745";
+          statusText.textContent = "Connected (Real-time)";
+        } else {
+          statusDot.style.background = "#ffc107";
+          statusText.textContent = "Polling mode";
+        }
+      }
+
+      // Tab switching
+      function switchTab(tabName) {
+        // Update tab buttons
+        document.querySelectorAll(".tab").forEach((tab) => {
+          tab.classList.remove("active");
+        });
+        event.target.classList.add("active");
+
+        // Update tab content
+        document.querySelectorAll(".tab-content").forEach((content) => {
+          content.classList.remove("active");
+        });
+        document.getElementById(tabName + "-tab").classList.add("active");
+
+        currentTab = tabName;
+
+        // Load data for the active tab
+        if (tabName === "data") {
+          loadData();
+        } else if (tabName === "pubsub") {
+          loadPubSubData();
+        }
+      }
+
+      // Handle action change in command interface
+      function handleActionChange() {
+        const action = document.getElementById("command-action").value;
+        const keyGroup = document.getElementById("key-input-group");
+        const valueGroup = document.getElementById("value-input-group");
+        const ttlGroup = document.getElementById("ttl-input-group");
+
+        // Reset visibility
+        keyGroup.classList.remove("hidden");
+        valueGroup.classList.add("hidden");
+        ttlGroup.classList.add("hidden");
+
+        // Show/hide inputs based on action
+        switch (action) {
+          case "PING":
+            keyGroup.classList.add("hidden");
+            break;
+          case "GET":
+          case "DELETE":
+            // Only key input needed
+            break;
+          case "SET":
+            valueGroup.classList.remove("hidden");
+            break;
+          case "SET_TTL":
+            valueGroup.classList.remove("hidden");
+            ttlGroup.classList.remove("hidden");
+            break;
+        }
+      }
+
+      // Load key-value data
+      async function loadData() {
+        const loadingEl = document.getElementById("data-loading");
+        const errorEl = document.getElementById("data-error");
+        const tableEl = document.getElementById("data-table");
+        const noDataEl = document.getElementById("no-data");
+
+        try {
+          loadingEl.style.display = "block";
+          errorEl.style.display = "none";
+          tableEl.style.display = "none";
+          noDataEl.style.display = "none";
+
+          const response = await fetch("/api/data");
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+          updateDataTable(data);
+        } catch (error) {
+          console.error("Error loading data:", error);
+          loadingEl.style.display = "none";
+          errorEl.style.display = "block";
+          errorEl.textContent = `Error loading data: ${error.message}`;
+          tableEl.style.display = "none";
+          noDataEl.style.display = "none";
+        }
+      }
+
+      // Update data table
+      function updateDataTable(data) {
+        const loadingEl = document.getElementById("data-loading");
+        const errorEl = document.getElementById("data-error");
+        const tableEl = document.getElementById("data-table");
+        const noDataEl = document.getElementById("no-data");
+        const tbody = document.getElementById("data-table-body");
+        const keyCountEl = document.getElementById("key-count");
+        const lastUpdateEl = document.getElementById("last-update");
+
+        loadingEl.style.display = "none";
+        errorEl.style.display = "none";
+
+        if (data.length === 0) {
+          tableEl.style.display = "none";
+          noDataEl.style.display = "block";
+        } else {
+          tableEl.style.display = "table";
+          noDataEl.style.display = "none";
+
+          tbody.innerHTML = "";
+          data.forEach((item) => {
+            const row = document.createElement("tr");
+
+            const ttlDisplay =
+              item.ttl !== null
+                ? `<span class="ttl-badge ttl-active">${item.ttl}s</span>`
+                : `<span class="ttl-badge ttl-none">∞</span>`;
+
+            row.innerHTML = `
+                        <td><code>${escapeHtml(item.key)}</code></td>
+                        <td><code>${escapeHtml(item.value)}</code></td>
+                        <td>${item.type}</td>
+                        <td>${ttlDisplay}</td>
+                    `;
+
+            tbody.appendChild(row);
+          });
+        }
+
+        // Update status
+        keyCountEl.textContent = `${data.length} key${data.length !== 1 ? "s" : ""}`;
+        lastUpdateEl.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+      }
+
+      // Execute Redis command
+      async function executeCommand() {
+        const action = document.getElementById("command-action").value;
+        const key = document.getElementById("command-key").value.trim();
+        const value = document.getElementById("command-value").value.trim();
+        const ttl = document.getElementById("command-ttl").value.trim();
+
+        // Build command based on action
+        let command = "";
+        switch (action) {
+          case "PING":
+            command = "PING";
+            break;
+          case "GET":
+            if (!key) {
+              showCommandError("Please enter a key name");
+              return;
+            }
+            command = `GET ${key}`;
+            break;
+          case "SET":
+            if (!key || !value) {
+              showCommandError("Please enter both key and value");
+              return;
+            }
+            command = `SET ${key} "${value}"`;
+            break;
+          case "DELETE":
+            if (!key) {
+              showCommandError("Please enter a key name");
+              return;
+            }
+            command = `DEL ${key}`;
+            break;
+          case "SET_TTL":
+            if (!key || !value || !ttl) {
+              showCommandError("Please enter key, value, and TTL");
+              return;
+            }
+            if (isNaN(ttl) || parseInt(ttl) <= 0) {
+              showCommandError("TTL must be a positive number");
+              return;
+            }
+            command = `SET ${key} "${value}"`;
+            break;
+        }
+
+        try {
+          const response = await fetch("/api/command", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ command }),
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            // If SET_TTL, execute EXPIRE command after SET
+            if (action === "SET_TTL") {
+              const expireResponse = await fetch("/api/command", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ command: `EXPIRE ${key} ${ttl}` }),
+              });
+
+              const expireResult = await expireResponse.json();
+              if (expireResult.success) {
+                showCommandSuccess(`Key set with TTL of ${ttl} seconds`);
+                appendCommandResult(
+                  `> ${command}\n${result.response}\n> EXPIRE ${key} ${ttl}\n${expireResult.response}\n`
+                );
+              } else {
+                showCommandError(`Set succeeded but TTL failed: ${expireResult.error}`);
+                appendCommandResult(
+                  `> ${command}\n${result.response}\n> EXPIRE ${key} ${ttl}\nERROR: ${expireResult.error}\n`
+                );
+              }
+            } else {
+              showCommandSuccess(`Command executed successfully`);
+              appendCommandResult(`> ${command}\n${result.response}\n`);
+            }
+
+            // Clear inputs and refresh data if it was a data-modifying command
+            if (action !== "PING" && action !== "GET") {
+              document.getElementById("command-key").value = "";
+              document.getElementById("command-value").value = "";
+              document.getElementById("command-ttl").value = "";
+              loadData();
+            }
+          } else {
+            showCommandError(result.error || "Command failed");
+            appendCommandResult(`> ${command}\nERROR: ${result.error}\n`);
+          }
+        } catch (error) {
+          showCommandError(`Network error: ${error.message}`);
+          appendCommandResult(`> ${command}\nNETWORK ERROR: ${error.message}\n`);
+        }
+      }
+
+      // Quick command execution (for pub-sub testing)
+      function quickCommand(command) {
+        // This is now only used for pub-sub commands in the pub-sub tab
+        // We'll implement a simple command execution for these cases
+        executeSimpleCommand(command);
+      }
+
+      // Execute simple command (for pub-sub testing)
+      async function executeSimpleCommand(command) {
+        try {
+          const response = await fetch("/api/command", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ command }),
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            console.log(`Command executed: ${command} -> ${result.response}`);
+          } else {
+            console.error(`Command failed: ${command} -> ${result.error}`);
+          }
+        } catch (error) {
+          console.error(`Network error: ${error.message}`);
+        }
+      }
+
+      // Show command success message
+      function showCommandSuccess(message) {
+        const successEl = document.getElementById("command-success");
+        const errorEl = document.getElementById("command-error");
+
+        errorEl.style.display = "none";
+        successEl.style.display = "block";
+        successEl.textContent = message;
+
+        setTimeout(() => {
+          successEl.style.display = "none";
+        }, 3000);
+      }
+
+      // Show command error message
+      function showCommandError(message) {
+        const successEl = document.getElementById("command-success");
+        const errorEl = document.getElementById("command-error");
+
+        successEl.style.display = "none";
+        errorEl.style.display = "block";
+        errorEl.textContent = message;
+
+        setTimeout(() => {
+          errorEl.style.display = "none";
+        }, 5000);
+      }
+
+      // Append to command result
+      function appendCommandResult(text) {
+        const resultEl = document.getElementById("command-result");
+        resultEl.textContent += text + "\n";
+        resultEl.scrollTop = resultEl.scrollHeight;
+      }
+
+      // Clear command result
+      function clearCommandResult() {
+        const resultEl = document.getElementById("command-result");
+        resultEl.textContent =
+          'Ready to execute commands...\n\nExamples:\nSET greeting "Hello World"\nGET greeting\nEXPIRE greeting 30\nDEL greeting\nPING\n';
+      }
+
+      // Clear all data
+      async function clearAllData() {
+        if (!confirm("Are you sure you want to delete all keys? This action cannot be undone.")) {
+          return;
+        }
+
+        try {
+          // Get all keys first
+          const response = await fetch("/api/data");
+          const data = await response.json();
+
+          if (data.length === 0) {
+            alert("No keys to delete");
+            return;
+          }
+
+          // Delete all keys
+          const keys = data.map((item) => item.key).join(" ");
+          const deleteResponse = await fetch("/api/command", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ command: `DEL ${keys}` }),
+          });
+
+          const result = await deleteResponse.json();
+
+          if (result.success) {
+            alert(`Successfully deleted ${result.response} keys`);
+            loadData();
+          } else {
+            alert(`Error deleting keys: ${result.error}`);
+          }
+        } catch (error) {
+          alert(`Error: ${error.message}`);
+        }
+      }
+
+      // Load Pub/Sub data
+      async function loadPubSubData() {
+        try {
+          const response = await fetch("/api/pubsub");
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const channels = await response.json();
+          updateChannelList(channels);
+        } catch (error) {
+          console.error("Error loading pub/sub data:", error);
+        }
+      }
+
+      // Update channel list
+      function updateChannelList(channels) {
+        const channelListEl = document.getElementById("channel-list");
+
+        if (channels.length === 0) {
+          channelListEl.innerHTML =
+            '<div style="text-align: center; color: #6c757d; padding: 2rem;">No active channels</div>';
+        } else {
+          channelListEl.innerHTML = "";
+          channels.forEach((channel) => {
+            const channelEl = document.createElement("div");
+            channelEl.className = "channel-item";
+            channelEl.innerHTML = `
+                        <span><strong>${escapeHtml(channel.channel)}</strong></span>
+                        <span class="subscriber-count">${channel.subscribers}</span>
+                    `;
+            channelListEl.appendChild(channelEl);
+          });
+        }
+      }
+
+      // Add message to log
+      function addMessageToLog(channel, message) {
+        const messageLogEl = document.getElementById("message-log");
+        const timestamp = new Date().toLocaleTimeString();
+
+        if (messageLog.length === 0) {
+          messageLogEl.innerHTML = "";
+        }
+
+        const messageEl = document.createElement("div");
+        messageEl.className = "message-item";
+        messageEl.innerHTML = `
+                <div class="message-timestamp">${timestamp}</div>
+                <div><strong>${escapeHtml(channel)}:</strong> ${escapeHtml(message)}</div>
+            `;
+
+        messageLogEl.appendChild(messageEl);
+        messageLog.push({ channel, message, timestamp });
+
+        // Keep only last 50 messages
+        if (messageLog.length > 50) {
+          messageLog.shift();
+          messageLogEl.removeChild(messageLogEl.firstChild);
+        }
+
+        messageLogEl.scrollTop = messageLogEl.scrollHeight;
+      }
+
+      // Utility function to escape HTML
+      function escapeHtml(text) {
+        const div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+      }
+
+      // Handle window beforeunload
+      window.addEventListener("beforeunload", function () {
+        if (websocket) {
+          websocket.close();
+        }
+      });
+    </script>
+  </body>
+</html>

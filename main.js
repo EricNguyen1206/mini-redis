@@ -1,9 +1,14 @@
 const net = require("net");
+const http = require("http");
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
 const MiniRedisStore = require("./store");
 const PubSub = require("./pubsub");
 const Client = require("./tcp_client");
 
 const DEFAULT_PORT = Number(process.env.PORT || 6380);
+const HTTP_PORT = Number(process.env.HTTP_PORT || 8080);
 
 /** Utility: robust-ish tokenizer supporting quoted args and escaped quotes. */
 function tokenize(line) {
@@ -50,29 +55,293 @@ function tokenize(line) {
 
 /** The main server */
 class MiniRedisServer {
-  constructor({ port = DEFAULT_PORT } = {}) {
+  constructor({ port = DEFAULT_PORT, httpPort = HTTP_PORT } = {}) {
     this.port = port;
+    this.httpPort = httpPort;
     this.kv = new MiniRedisStore();
     this.ps = new PubSub();
+    this.webClients = new Set(); // WebSocket clients for real-time updates
+
+    // TCP Server for Redis protocol
     this.server = net.createServer((socket) => {
       const client = new Client(socket, this);
       client.send(`* connected to mini-redis on port ${this.port}`);
+    });
+
+    // HTTP Server for web interface
+    this.httpServer = http.createServer((req, res) => {
+      this.handleHttpRequest(req, res);
+    });
+
+    // Handle WebSocket upgrades for real-time updates
+    this.httpServer.on("upgrade", (request, socket, head) => {
+      this.handleWebSocketUpgrade(request, socket, head);
     });
   }
 
   listen() {
     return new Promise((resolve) => {
+      // Start TCP server
       this.server.listen(this.port, () => {
-        console.log(`mini-redis listening on 127.0.0.1:${this.port}`);
-        resolve();
+        console.log(`mini-redis TCP server listening on 127.0.0.1:${this.port}`);
+
+        // Start HTTP server
+        this.httpServer.listen(this.httpPort, () => {
+          console.log(`mini-redis HTTP server listening on 127.0.0.1:${this.httpPort}`);
+          console.log(`Web interface available at http://127.0.0.1:${this.httpPort}`);
+          resolve();
+        });
       });
     });
   }
 
   close() {
     return new Promise((resolve) => {
-      this.server.close(() => resolve());
+      this.server.close(() => {
+        this.httpServer.close(() => resolve());
+      });
     });
+  }
+
+  // HTTP request handler
+  handleHttpRequest(req, res) {
+    const url = new URL(req.url, `http://${req.headers.host}`);
+
+    // Enable CORS
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+    if (req.method === "OPTIONS") {
+      res.writeHead(200);
+      res.end();
+      return;
+    }
+
+    try {
+      switch (url.pathname) {
+        case "/":
+          this.serveFile(res, "index.html", "text/html");
+          break;
+        case "/api/data":
+          this.handleApiData(req, res);
+          break;
+        case "/api/command":
+          this.handleApiCommand(req, res);
+          break;
+        case "/api/pubsub":
+          this.handleApiPubSub(req, res);
+          break;
+        default:
+          res.writeHead(404);
+          res.end("Not Found");
+      }
+    } catch (error) {
+      res.writeHead(500);
+      res.end("Internal Server Error");
+    }
+  }
+
+  // Serve static files
+  serveFile(res, filename, contentType) {
+    try {
+      const filePath = path.join(__dirname, filename);
+      const content = fs.readFileSync(filePath, "utf8");
+      res.writeHead(200, { "Content-Type": contentType });
+      res.end(content);
+    } catch (error) {
+      res.writeHead(404);
+      res.end("File not found");
+    }
+  }
+
+  // API endpoint handlers
+  handleApiData(req, res) {
+    if (req.method !== "GET") {
+      res.writeHead(405);
+      res.end("Method Not Allowed");
+      return;
+    }
+
+    const data = [];
+    for (const [key, value] of this.kv.store.entries()) {
+      const expiration = this.kv.expirations.get(key);
+      let ttl = null;
+      if (expiration) {
+        // Calculate remaining TTL in seconds
+        // Note: Node.js timeout objects don't have _idleStart/_idleTimeout in all versions
+        // We'll use a simpler approach by storing expiration time
+        const now = Date.now();
+        const expirationTime = expiration._idleStart ? expiration._idleStart + expiration._idleTimeout : now + 1000; // fallback to 1 second if properties not available
+        ttl = Math.max(0, Math.ceil((expirationTime - now) / 1000));
+      }
+      data.push({
+        key,
+        value,
+        ttl,
+        type: "string",
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(data));
+  }
+
+  handleApiCommand(req, res) {
+    if (req.method !== "POST") {
+      res.writeHead(405);
+      res.end("Method Not Allowed");
+      return;
+    }
+
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk.toString();
+    });
+
+    req.on("end", () => {
+      try {
+        const { command } = JSON.parse(body);
+
+        // Create a mock client for API commands
+        const mockClient = {
+          send: (response) => {
+            res.writeHead(200, { "Content-Type": "application/json" });
+            res.end(
+              JSON.stringify({
+                success: true,
+                response,
+                timestamp: new Date().toISOString(),
+              })
+            );
+
+            // Notify WebSocket clients of data changes
+            this.notifyWebClients();
+          },
+          subscribed: new Set(),
+        };
+
+        this.handleCommand(mockClient, command);
+      } catch (error) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({
+            success: false,
+            error: error.message,
+          })
+        );
+      }
+    });
+  }
+
+  handleApiPubSub(req, res) {
+    if (req.method !== "GET") {
+      res.writeHead(405);
+      res.end("Method Not Allowed");
+      return;
+    }
+
+    const channels = [];
+    for (const [channel, clients] of this.ps.channels.entries()) {
+      channels.push({
+        channel,
+        subscribers: clients.size,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(channels));
+  }
+
+  // WebSocket handling for real-time updates
+  handleWebSocketUpgrade(request, socket, head) {
+    const key = request.headers["sec-websocket-key"];
+    const acceptKey = this.generateWebSocketAcceptKey(key);
+
+    const responseHeaders = [
+      "HTTP/1.1 101 Switching Protocols",
+      "Upgrade: websocket",
+      "Connection: Upgrade",
+      `Sec-WebSocket-Accept: ${acceptKey}`,
+      "",
+      "",
+    ].join("\r\n");
+
+    socket.write(responseHeaders);
+
+    // Add to web clients set
+    this.webClients.add(socket);
+
+    socket.on("close", () => {
+      this.webClients.delete(socket);
+    });
+
+    socket.on("error", () => {
+      this.webClients.delete(socket);
+    });
+  }
+
+  generateWebSocketAcceptKey(key) {
+    const WEBSOCKET_MAGIC_STRING = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
+    return crypto
+      .createHash("sha1")
+      .update(key + WEBSOCKET_MAGIC_STRING)
+      .digest("base64");
+  }
+
+  notifyWebClients() {
+    const data = [];
+    for (const [key, value] of this.kv.store.entries()) {
+      const expiration = this.kv.expirations.get(key);
+      let ttl = null;
+      if (expiration) {
+        const now = Date.now();
+        const expirationTime = expiration._idleStart ? expiration._idleStart + expiration._idleTimeout : now + 1000;
+        ttl = Math.max(0, Math.ceil((expirationTime - now) / 1000));
+      }
+      data.push({ key, value, ttl, type: "string", timestamp: new Date().toISOString() });
+    }
+
+    const message = JSON.stringify({ type: "data_update", data });
+    const frame = this.createWebSocketFrame(message);
+
+    for (const client of this.webClients) {
+      try {
+        client.write(frame);
+      } catch (error) {
+        this.webClients.delete(client);
+      }
+    }
+  }
+
+  createWebSocketFrame(data) {
+    const payload = Buffer.from(data, "utf8");
+    const payloadLength = payload.length;
+
+    let frame;
+    if (payloadLength < 126) {
+      frame = Buffer.allocUnsafe(2 + payloadLength);
+      frame[0] = 0x81; // FIN + text frame
+      frame[1] = payloadLength;
+      payload.copy(frame, 2);
+    } else if (payloadLength < 65536) {
+      frame = Buffer.allocUnsafe(4 + payloadLength);
+      frame[0] = 0x81;
+      frame[1] = 126;
+      frame.writeUInt16BE(payloadLength, 2);
+      payload.copy(frame, 4);
+    } else {
+      frame = Buffer.allocUnsafe(10 + payloadLength);
+      frame[0] = 0x81;
+      frame[1] = 127;
+      frame.writeUInt32BE(0, 2);
+      frame.writeUInt32BE(payloadLength, 6);
+      payload.copy(frame, 10);
+    }
+
+    return frame;
   }
 
   handleClientClose(client) {
@@ -98,6 +367,7 @@ class MiniRedisServer {
           const value = args.slice(2).join(" "); // allow spaces if quoted pieces combined
           this.kv.set(key, value);
           client.send("OK");
+          this.notifyWebClients(); // Notify web clients of data change
           break;
         }
         case "GET": {
@@ -110,6 +380,7 @@ class MiniRedisServer {
           if (args.length < 2) return client.send("ERR wrong number of arguments for DEL");
           const n = this.kv.del(args.slice(1));
           client.send(String(n));
+          this.notifyWebClients(); // Notify web clients of data change
           break;
         }
         case "EXPIRE": {
@@ -120,10 +391,11 @@ class MiniRedisServer {
             return client.send("ERR seconds must be a non-negative number");
           }
           const result = this.kv.expire(key, sec, () => {
-            // Optionally notify subscribers of a special channel, or ignore.
-            // For simplicity, we do nothing here.
+            // Notify web clients when key expires
+            this.notifyWebClients();
           });
           client.send(String(result));
+          this.notifyWebClients(); // Notify web clients of TTL change
           break;
         }
 
