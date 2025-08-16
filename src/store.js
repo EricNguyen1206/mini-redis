@@ -25,6 +25,12 @@ class MiniRedisStore {
       if (this.store.delete(key)) {
         removed++;
       }
+      // Always attempt to clear any pending expiration for robustness
+      this._clearExpiration(key);
+    }
+    return removed;
+  }
+
   expire(key, seconds, onExpire) {
     if (!this.store.has(key)) return 0;
     const msRaw = Number(seconds) * 1000;
@@ -33,21 +39,8 @@ class MiniRedisStore {
     const handle = setTimeout(() => {
       this.store.delete(key);
       this.expirations.delete(key);
-      if (typeof onExpire === "function") {
-        try {
-          onExpire(key);
-        } catch {
-          // Swallow errors to avoid crashing the process on expiration callback
-        }
-      }
-    }, ms);
-    if (typeof handle?.unref === "function") handle.unref();
-    this.expirations.set(key, handle);
-    return 1;
-  }
-      this.expirations.delete(key);
       if (typeof onExpire === "function") onExpire(key);
-    }, seconds * 1000);
+    }, ms);
     this.expirations.set(key, handle);
     return 1;
   }
