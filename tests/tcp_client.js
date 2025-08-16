@@ -16,13 +16,24 @@ class Client {
       // Could log; keep alive unless fatal
       // console.error(`Client ${this.id} error:`, err.message);
     });
+
+    // Register socket with the I/O multiplexer for efficient writes
+    if (server && server.mux) {
+      server.mux.registerSocket(socket);
+    }
   }
 
   send(line) {
-    try {
-      this.socket.write(line + "\n");
-    } catch (_) {
-      // ignore broken pipe
+    // Use the I/O multiplexer for efficient, non-blocking writes
+    if (this.server && this.server.mux) {
+      this.server.mux.enqueue(this.socket, line);
+    } else {
+      // Fallback to direct write if multiplexer is not available
+      try {
+        this.socket.write(line + "\n");
+      } catch (_) {
+        // ignore broken pipe
+      }
     }
   }
 

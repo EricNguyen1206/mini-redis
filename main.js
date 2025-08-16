@@ -3,9 +3,11 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const MiniRedisStore = require("./store");
-const PubSub = require("./pubsub");
-const Client = require("./tcp_client");
+const MiniRedisStore = require("./src/store");
+const PubSub = require("./src/pubsub");
+const Client = require("./tests/tcp_client");
+const { IOMultiplexer } = require("./src/io_multiflexing");
+const PerformanceMonitor = require("./src/performance_monitor");
 
 const DEFAULT_PORT = Number(process.env.PORT || 6380);
 const HTTP_PORT = Number(process.env.HTTP_PORT || 8080);
@@ -59,8 +61,22 @@ class MiniRedisServer {
     this.port = port;
     this.httpPort = httpPort;
     this.kv = new MiniRedisStore();
-    this.ps = new PubSub();
+    this.mux = new IOMultiplexer(); // I/O multiplexer for efficient socket writes
+    this.ps = new PubSub(this.mux); // Pass multiplexer to PubSub for high-performance broadcasting
     this.webClients = new Set(); // WebSocket clients for real-time updates
+
+    // Initialize performance monitoring
+    this.performanceMonitor = new PerformanceMonitor(this);
+
+    // Forward performance metrics to web clients
+    this.performanceMonitor.on("metricsUpdate", (metrics) => {
+      this.broadcastToWebClients(
+        JSON.stringify({
+          type: "performance",
+          data: metrics,
+        })
+      );
+    });
 
     // TCP Server for Redis protocol
     this.server = net.createServer((socket) => {
@@ -121,7 +137,7 @@ class MiniRedisServer {
     try {
       switch (url.pathname) {
         case "/":
-          this.serveFile(res, "index.html", "text/html");
+          this.serveFile(res, "web/index.html", "text/html");
           break;
         case "/api/data":
           this.handleApiData(req, res);
@@ -131,6 +147,9 @@ class MiniRedisServer {
           break;
         case "/api/pubsub":
           this.handleApiPubSub(req, res);
+          break;
+        case "/api/performance":
+          this.handleApiPerformance(req, res);
           break;
         default:
           res.writeHead(404);
@@ -271,6 +290,20 @@ class MiniRedisServer {
     res.end(JSON.stringify(channels));
   }
 
+  handleApiPerformance(req, res) {
+    if (req.method !== "GET") {
+      res.writeHead(405);
+      res.end("Method Not Allowed");
+      return;
+    }
+
+    // Get current performance metrics
+    const metrics = this.performanceMonitor.getMetrics();
+
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(metrics));
+  }
+
   // WebSocket handling for real-time updates
   handleWebSocketUpgrade(request, socket, head) {
     const key = request.headers["sec-websocket-key"];
@@ -321,6 +354,10 @@ class MiniRedisServer {
     }
 
     const message = JSON.stringify({ type: "data_update", data });
+    this.broadcastToWebClients(message);
+  }
+
+  broadcastToWebClients(message) {
     const frame = this.createWebSocketFrame(message);
 
     for (const client of this.webClients) {
@@ -517,14 +554,5 @@ class MiniRedisServer {
 //   demoLog("Demo complete. Press Ctrl+C to stop the server.");
 // }
 
-(async () => {
-  const isDemo = process.argv.includes("--demo");
-  const port = DEFAULT_PORT;
-
-  if (isDemo) {
-    await runDemo(port);
-  } else {
-    const srv = new MiniRedisServer({ port });
-    await srv.listen();
-  }
-})();
+// Export the class for use as a module
+module.exports = MiniRedisServer;

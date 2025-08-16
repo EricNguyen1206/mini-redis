@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mini Redis Insight</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
       * {
         margin: 0;
@@ -23,6 +24,9 @@
         border-bottom: 1px solid #e9ecef;
         padding: 1rem 0;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        position: sticky;
+        top: 0;
+        z-index: 10;
       }
 
       .container {
@@ -313,6 +317,160 @@
         gap: 2rem;
       }
 
+      .pubsub-command-interface {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1.5rem;
+        border: 1px solid #e9ecef;
+      }
+
+      .pubsub-form-row {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        align-items: end;
+      }
+
+      .pubsub-form-row:last-child {
+        margin-bottom: 0;
+      }
+
+      .pubsub-input-group {
+        display: flex;
+        flex-direction: column;
+        min-width: 150px;
+      }
+
+      .pubsub-input-group label {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #495057;
+        margin-bottom: 0.25rem;
+      }
+
+      .pubsub-input-group .form-control {
+        padding: 0.5rem;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 0.9rem;
+      }
+
+      .pubsub-input-group select.form-control {
+        cursor: pointer;
+      }
+
+      .pubsub-command-result {
+        background: #e9ecef;
+        border-radius: 4px;
+        padding: 0.75rem;
+        font-family: "Courier New", monospace;
+        font-size: 0.85rem;
+        border-left: 4px solid #007bff;
+      }
+
+      .pubsub-command-result.success {
+        background: #d4edda;
+        border-left-color: #28a745;
+        color: #155724;
+      }
+
+      .pubsub-command-result.error {
+        background: #f8d7da;
+        border-left-color: #dc3545;
+        color: #721c24;
+      }
+
+      .performance-section {
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+      }
+
+      .performance-group {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1.5rem;
+        border: 1px solid #e9ecef;
+      }
+
+      .performance-group h3 {
+        margin: 0 0 1rem 0;
+        color: #495057;
+        font-size: 1.2rem;
+      }
+
+      .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 1rem;
+      }
+
+      .metric-card {
+        background: white;
+        border-radius: 8px;
+        padding: 1rem;
+        border: 1px solid #dee2e6;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        display: flex;
+        flex-direction: column;
+        height: 400px; /* Reduced total height for more compact layout */
+      }
+
+      .metric-card h4 {
+        color: #6c757d;
+        font-size: 0.9rem;
+        font-weight: 500;
+        flex-shrink: 0; /* Prevent title from shrinking */
+      }
+
+      .metric-card__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.5rem;
+      }
+
+      .metric-card__header--left {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0;
+      }
+
+      .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #007bff;
+        flex-shrink: 0; /* Prevent value from shrinking */
+      }
+
+      .metric-unit {
+        font-size: 0.8rem;
+        color: #6c757d;
+        flex-shrink: 0; /* Prevent unit from shrinking */
+      }
+
+      .metric-chart-container {
+        flex: 1; /* Take remaining space */
+        position: relative;
+        height: 300px; /* Reduced height for more compact charts */
+        min-height: 300px;
+        max-height: 300px;
+      }
+
+      .metric-card canvas {
+        position: absolute !important;
+        top: 0;
+        left: 0;
+        width: 100% !important;
+        height: 300px !important;
+      }
+
+      .performance-section .performance-group:last-child .metrics-grid .metric-card {
+        height: 120px;
+      }
+
       .channel-list {
         background: #f8f9fa;
         border-radius: 6px;
@@ -417,6 +575,22 @@
           grid-template-columns: 1fr;
         }
 
+        .pubsub-form-row {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 0.5rem;
+        }
+
+        .pubsub-input-group {
+          min-width: auto;
+          width: 100%;
+        }
+
+        .pubsub-form-row button {
+          margin-left: 0 !important;
+          align-self: stretch;
+        }
+
         .data-commands-grid {
           grid-template-columns: 1fr;
           gap: 1rem;
@@ -437,6 +611,25 @@
           margin-top: 1rem;
         }
 
+        .metrics-grid {
+          grid-template-columns: 1fr;
+          gap: 1rem;
+        }
+
+        .metric-card {
+          height: 350px; /* Reduced height for mobile layout */
+        }
+
+        .metric-chart-container {
+          height: 250px; /* Compact chart height for mobile */
+          min-height: 250px;
+          max-height: 250px;
+        }
+
+        .metric-card canvas {
+          height: 250px !important; /* Compact canvas height for mobile */
+        }
+
         #footer {
           padding: 1.5rem 0;
           margin-top: 2rem;
@@ -444,6 +637,179 @@
 
         #footer p {
           font-size: 0.8rem;
+        }
+      }
+
+      /* Toast Notification System */
+      .toast-container {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        pointer-events: none;
+        max-width: 400px;
+      }
+
+      .toast {
+        background: #fff;
+        border-radius: 8px;
+        padding: 16px 20px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        border-left: 4px solid #007bff;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        pointer-events: auto;
+        transform: translateX(100%);
+        opacity: 0;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        max-width: 100%;
+        word-wrap: break-word;
+      }
+
+      .toast.show {
+        transform: translateX(0);
+        opacity: 1;
+      }
+
+      .toast.hide {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+
+      .toast-icon {
+        flex-shrink: 0;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+        color: white;
+        margin-top: 2px;
+      }
+
+      .toast-content {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .toast-title {
+        font-weight: 600;
+        font-size: 14px;
+        margin: 0 0 4px 0;
+        line-height: 1.2;
+      }
+
+      .toast-message {
+        font-size: 13px;
+        line-height: 1.4;
+        margin: 0;
+        color: #6c757d;
+        white-space: pre-wrap;
+      }
+
+      .toast-close {
+        flex-shrink: 0;
+        background: none;
+        border: none;
+        font-size: 18px;
+        color: #adb5bd;
+        cursor: pointer;
+        padding: 0;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+      }
+
+      .toast-close:hover {
+        background: #f8f9fa;
+        color: #495057;
+      }
+
+      .toast-close:focus {
+        outline: 2px solid #007bff;
+        outline-offset: 2px;
+      }
+
+      /* Toast Types */
+      .toast.success {
+        border-left-color: #28a745;
+      }
+
+      .toast.success .toast-icon {
+        background: #28a745;
+      }
+
+      .toast.success .toast-title {
+        color: #155724;
+      }
+
+      .toast.error {
+        border-left-color: #dc3545;
+      }
+
+      .toast.error .toast-icon {
+        background: #dc3545;
+      }
+
+      .toast.error .toast-title {
+        color: #721c24;
+      }
+
+      .toast.info {
+        border-left-color: #17a2b8;
+      }
+
+      .toast.info .toast-icon {
+        background: #17a2b8;
+      }
+
+      .toast.info .toast-title {
+        color: #0c5460;
+      }
+
+      .toast.warning {
+        border-left-color: #ffc107;
+      }
+
+      .toast.warning .toast-icon {
+        background: #ffc107;
+        color: #212529;
+      }
+
+      .toast.warning .toast-title {
+        color: #856404;
+      }
+
+      /* Mobile Responsive */
+      @media (max-width: 768px) {
+        .toast-container {
+          top: 10px;
+          right: 10px;
+          left: 10px;
+          max-width: none;
+        }
+
+        .toast {
+          padding: 12px 16px;
+        }
+
+        .toast-title {
+          font-size: 13px;
+        }
+
+        .toast-message {
+          font-size: 12px;
         }
       }
     </style>
@@ -474,6 +840,7 @@
         <div class="tabs">
           <button class="tab active" onclick="switchTab('data')">📊 Data & Commands</button>
           <button class="tab" onclick="switchTab('pubsub')">📡 Pub/Sub</button>
+          <button class="tab" onclick="switchTab('performance')">⚡ Performance</button>
         </div>
 
         <!-- Data & Commands Tab -->
@@ -576,19 +943,180 @@
 
           <div style="margin-top: 2rem">
             <h3>Test Pub/Sub</h3>
-            <div style="display: flex; gap: 1rem; margin-top: 1rem">
-              <button class="btn btn-secondary" onclick="quickCommand('SUBSCRIBE test_channel')">
-                Subscribe to test_channel
-              </button>
-              <button class="btn btn-secondary" onclick="quickCommand('PUBLISH test_channel &quot;Hello World&quot;')">
-                Publish Test Message
-              </button>
-              <button class="btn btn-secondary" onclick="quickCommand('UNSUBSCRIBE test_channel')">Unsubscribe</button>
+            <div class="pubsub-command-interface" style="margin-top: 1rem">
+              <div class="pubsub-form-row">
+                <div class="pubsub-input-group">
+                  <label for="pubsub-action">Action:</label>
+                  <select id="pubsub-action" class="form-control" onchange="handlePubSubActionChange()">
+                    <option value="SUBSCRIBE">SUBSCRIBE</option>
+                    <option value="PUBLISH">PUBLISH</option>
+                    <option value="UNSUBSCRIBE">UNSUBSCRIBE</option>
+                  </select>
+                </div>
+                <div class="pubsub-input-group">
+                  <label for="pubsub-channel">Channel:</label>
+                  <input
+                    type="text"
+                    id="pubsub-channel"
+                    class="form-control"
+                    placeholder="Enter channel name"
+                    value="test_channel"
+                  />
+                </div>
+              </div>
+              <div class="pubsub-form-row" id="pubsub-message-row" style="display: none">
+                <div class="pubsub-input-group" style="flex: 1">
+                  <label for="pubsub-message">Message:</label>
+                  <input type="text" id="pubsub-message" class="form-control" placeholder="Enter message content" />
+                </div>
+              </div>
+              <div class="pubsub-form-row">
+                <button class="btn btn-primary" onclick="executePubSubCommand()" style="margin-left: auto">
+                  Send Command
+                </button>
+              </div>
+              <div
+                id="pubsub-command-result"
+                class="pubsub-command-result"
+                style="display: none; margin-top: 1rem"
+              ></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Performance Tab -->
+        <div id="performance-tab" class="tab-content">
+          <h2>Real-time Performance Metrics</h2>
+
+          <div class="performance-section">
+            <!-- Cache Performance Metrics -->
+            <div class="performance-group">
+              <h3>Cache Performance</h3>
+              <div class="metrics-grid">
+                <div class="metric-card">
+                  <div class="metric-card__header">
+                    <div class="metric-card__header--left">
+                      <h4>Requests Per Second</h4>
+                      <div class="metric-unit">commands/sec</div>
+                    </div>
+                    <div class="metric-value" id="cache-rps">0</div>
+                  </div>
+                  <div class="metric-chart-container">
+                    <canvas id="cache-rps-chart"></canvas>
+                  </div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-card__header">
+                    <div class="metric-card__header--left">
+                      <h4>P99 Latency</h4>
+                      <div class="metric-unit">milliseconds</div>
+                    </div>
+                    <div class="metric-value" id="cache-latency">0</div>
+                  </div>
+                  <div class="metric-chart-container">
+                    <canvas id="cache-latency-chart"></canvas>
+                  </div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-card__header">
+                    <div class="metric-card__header--left">
+                      <h4>Cache Hit Rate</h4>
+                      <div class="metric-unit">percent</div>
+                    </div>
+                    <div class="metric-value" id="cache-hit-rate">0</div>
+                  </div>
+                  <div class="metric-chart-container">
+                    <canvas id="cache-hit-rate-chart"></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Pub/Sub Performance Metrics -->
+            <div class="performance-group">
+              <h3>Pub/Sub Performance</h3>
+              <div class="metrics-grid">
+                <div class="metric-card">
+                  <div class="metric-card__header">
+                    <div class="metric-card__header--left">
+                      <h4>Messages Published/Sec</h4>
+                      <div class="metric-unit">messages/sec</div>
+                    </div>
+                    <div class="metric-value" id="pubsub-published">0</div>
+                  </div>
+                  <div class="metric-chart-container">
+                    <canvas id="pubsub-published-chart"></canvas>
+                  </div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-card__header">
+                    <div class="metric-card__header--left">
+                      <h4>Messages Consumed/Sec</h4>
+                      <div class="metric-unit">messages/sec</div>
+                    </div>
+                    <div class="metric-value" id="pubsub-consumed">0</div>
+                  </div>
+                  <div class="metric-chart-container">
+                    <canvas id="pubsub-consumed-chart"></canvas>
+                  </div>
+                </div>
+                <div class="metric-card">
+                  <div class="metric-card__header">
+                    <div class="metric-card__header--left">
+                      <h4>Message Latency P99</h4>
+                      <div class="metric-unit">milliseconds</div>
+                    </div>
+                    <div class="metric-value" id="pubsub-latency">0</div>
+                  </div>
+                  <div class="metric-chart-container">
+                    <canvas id="pubsub-latency-chart"></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- System Metrics -->
+            <div class="performance-group">
+              <h3>System Metrics</h3>
+              <div class="metrics-grid">
+                <div class="metric-card">
+                  <div class="metric-card__header">
+                    <div class="metric-card__header--left">
+                      <h4>Active Connections</h4>
+                      <div class="metric-unit">connections</div>
+                    </div>
+                    <div class="metric-value" id="system-connections">0</div>
+                  </div>
+                </div>
+
+                <div class="metric-card">
+                  <div class="metric-card__header">
+                    <div class="metric-card__header--left">
+                      <h4>Memory Usage</h4>
+                      <div class="metric-unit">MB</div>
+                    </div>
+                    <div class="metric-value" id="system-memory">0</div>
+                  </div>
+                </div>
+
+                <div class="metric-card">
+                  <div class="metric-card__header">
+                    <div class="metric-card__header--left">
+                      <h4>Uptime</h4>
+                      <div class="metric-unit">seconds</div>
+                    </div>
+                    <div class="metric-value" id="system-uptime">0</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="toast-container" aria-live="polite" aria-label="Notifications"></div>
 
     <footer id="footer">
       <div>
@@ -603,19 +1131,149 @@
       let messageLog = [];
       let isConnected = false;
 
+      // Performance monitoring state
+      let performanceCharts = {};
+      let performanceData = {
+        cache: { rps: [], latency: [], hitRate: [] },
+        pubsub: { published: [], consumed: [], latency: [] },
+      };
+      let maxDataPoints = 60; // Keep 60 seconds of data
+
+      // Toast notification system
+      let toastCounter = 0;
+      const activeToasts = new Map();
+
+      // Toast notification functions
+      function showToast(message, type = "info", title = "", duration = null) {
+        const toastId = ++toastCounter;
+        const container = document.getElementById("toast-container");
+
+        // Set default durations based on type
+        if (duration === null) {
+          switch (type) {
+            case "success":
+              duration = 4000;
+              break;
+            case "error":
+              duration = 8000;
+              break;
+            case "warning":
+              duration = 6000;
+              break;
+            default:
+              duration = 5000;
+          }
+        }
+
+        // Set default titles based on type
+        if (!title) {
+          switch (type) {
+            case "success":
+              title = "Success";
+              break;
+            case "error":
+              title = "Error";
+              break;
+            case "warning":
+              title = "Warning";
+              break;
+            default:
+              title = "Info";
+          }
+        }
+
+        // Create toast element
+        const toast = document.createElement("div");
+        toast.className = `toast ${type}`;
+        toast.setAttribute("role", "alert");
+        toast.setAttribute("aria-live", "assertive");
+        toast.setAttribute("aria-atomic", "true");
+        toast.id = `toast-${toastId}`;
+
+        // Get icon based on type
+        const icons = {
+          success: "✓",
+          error: "✕",
+          warning: "⚠",
+          info: "ℹ",
+        };
+
+        toast.innerHTML = `
+          <div class="toast-icon">${icons[type] || icons.info}</div>
+          <div class="toast-content">
+            <div class="toast-title">${title}</div>
+            <div class="toast-message">${message}</div>
+          </div>
+          <button class="toast-close" aria-label="Close notification" onclick="dismissToast(${toastId})">×</button>
+        `;
+
+        // Add to container
+        container.appendChild(toast);
+        activeToasts.set(toastId, toast);
+
+        // Trigger show animation
+        requestAnimationFrame(() => {
+          toast.classList.add("show");
+        });
+
+        // Auto-dismiss after duration
+        if (duration > 0) {
+          setTimeout(() => {
+            dismissToast(toastId);
+          }, duration);
+        }
+
+        return toastId;
+      }
+
+      function dismissToast(toastId) {
+        const toast = activeToasts.get(toastId);
+        if (!toast) return;
+
+        toast.classList.remove("show");
+        toast.classList.add("hide");
+
+        setTimeout(() => {
+          if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+          }
+          activeToasts.delete(toastId);
+        }, 300);
+      }
+
+      function dismissAllToasts() {
+        for (const toastId of activeToasts.keys()) {
+          dismissToast(toastId);
+        }
+      }
+
+      // Keyboard support for toasts
+      document.addEventListener("keydown", function (event) {
+        // Escape key dismisses all toasts
+        if (event.key === "Escape" && activeToasts.size > 0) {
+          dismissAllToasts();
+          event.preventDefault();
+        }
+      });
+
       // Initialize the application
       document.addEventListener("DOMContentLoaded", function () {
         initializeWebSocket();
         loadData();
         loadPubSubData();
+        initializePerformanceCharts();
 
         // Auto-refresh data every 5 seconds as fallback
         setInterval(() => {
           if (!isConnected) {
             loadData();
             loadPubSubData();
+            loadPerformanceData();
           }
         }, 5000);
+
+        // Load performance data every 2 seconds
+        setInterval(loadPerformanceData, 2000);
       });
 
       // WebSocket connection for real-time updates
@@ -635,6 +1293,8 @@
               const data = JSON.parse(event.data);
               if (data.type === "data_update") {
                 updateDataTable(data.data);
+              } else if (data.type === "performance") {
+                updatePerformanceMetrics(data.data);
               }
             } catch (error) {
               console.error("WebSocket message error:", error);
@@ -695,6 +1355,16 @@
           loadData();
         } else if (tabName === "pubsub") {
           loadPubSubData();
+        } else if (tabName === "performance") {
+          loadPerformanceData();
+          // Resize charts when tab becomes visible
+          setTimeout(() => {
+            Object.values(performanceCharts).forEach((chart) => {
+              if (chart && chart.resize) {
+                chart.resize();
+              }
+            });
+          }, 100);
         }
       }
 
@@ -939,30 +1609,12 @@
 
       // Show command success message
       function showCommandSuccess(message) {
-        const successEl = document.getElementById("command-success");
-        const errorEl = document.getElementById("command-error");
-
-        errorEl.style.display = "none";
-        successEl.style.display = "block";
-        successEl.textContent = message;
-
-        setTimeout(() => {
-          successEl.style.display = "none";
-        }, 3000);
+        showToast(message, "success", "Command Successful");
       }
 
       // Show command error message
       function showCommandError(message) {
-        const successEl = document.getElementById("command-success");
-        const errorEl = document.getElementById("command-error");
-
-        successEl.style.display = "none";
-        errorEl.style.display = "block";
-        errorEl.textContent = message;
-
-        setTimeout(() => {
-          errorEl.style.display = "none";
-        }, 5000);
+        showToast(message, "error", "Command Error");
       }
 
       // Append to command result
@@ -1087,6 +1739,337 @@
         const div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
+      }
+
+      // Performance monitoring functions
+      function initializePerformanceCharts() {
+        const chartConfig = {
+          type: "line",
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+              intersect: false,
+              mode: "index",
+            },
+            scales: {
+              x: {
+                display: false,
+                grid: {
+                  display: false,
+                },
+              },
+              y: {
+                beginAtZero: true,
+                grid: {
+                  color: "rgba(0,0,0,0.1)",
+                },
+                ticks: {
+                  font: {
+                    size: 11,
+                  },
+                  maxTicksLimit: 6,
+                },
+              },
+            },
+            plugins: {
+              legend: {
+                display: false,
+              },
+              tooltip: {
+                enabled: true,
+                mode: "nearest",
+                intersect: false,
+              },
+            },
+            elements: {
+              point: {
+                radius: 0,
+                hoverRadius: 4,
+              },
+              line: {
+                borderWidth: 2,
+                tension: 0.1,
+              },
+            },
+            animation: {
+              duration: 0, // Disable animations for better performance
+            },
+            layout: {
+              padding: {
+                top: 10,
+                bottom: 10,
+                left: 10,
+                right: 10,
+              },
+            },
+          },
+        };
+
+        // Initialize cache charts
+        performanceCharts.cacheRps = new Chart(document.getElementById("cache-rps-chart"), {
+          ...chartConfig,
+          data: {
+            labels: Array(maxDataPoints).fill(""),
+            datasets: [
+              {
+                data: Array(maxDataPoints).fill(0),
+                borderColor: "#007bff",
+                backgroundColor: "rgba(0, 123, 255, 0.1)",
+                fill: true,
+              },
+            ],
+          },
+        });
+
+        performanceCharts.cacheLatency = new Chart(document.getElementById("cache-latency-chart"), {
+          ...chartConfig,
+          data: {
+            labels: Array(maxDataPoints).fill(""),
+            datasets: [
+              {
+                data: Array(maxDataPoints).fill(0),
+                borderColor: "#28a745",
+                backgroundColor: "rgba(40, 167, 69, 0.1)",
+                fill: true,
+              },
+            ],
+          },
+        });
+
+        performanceCharts.cacheHitRate = new Chart(document.getElementById("cache-hit-rate-chart"), {
+          ...chartConfig,
+          data: {
+            labels: Array(maxDataPoints).fill(""),
+            datasets: [
+              {
+                data: Array(maxDataPoints).fill(0),
+                borderColor: "#ffc107",
+                backgroundColor: "rgba(255, 193, 7, 0.1)",
+                fill: true,
+              },
+            ],
+          },
+          options: {
+            ...chartConfig.options,
+            scales: {
+              ...chartConfig.options.scales,
+              y: {
+                beginAtZero: true,
+                max: 100,
+              },
+            },
+          },
+        });
+
+        // Initialize pub/sub charts
+        performanceCharts.pubsubPublished = new Chart(document.getElementById("pubsub-published-chart"), {
+          ...chartConfig,
+          data: {
+            labels: Array(maxDataPoints).fill(""),
+            datasets: [
+              {
+                data: Array(maxDataPoints).fill(0),
+                borderColor: "#dc3545",
+                backgroundColor: "rgba(220, 53, 69, 0.1)",
+                fill: true,
+              },
+            ],
+          },
+        });
+
+        performanceCharts.pubsubConsumed = new Chart(document.getElementById("pubsub-consumed-chart"), {
+          ...chartConfig,
+          data: {
+            labels: Array(maxDataPoints).fill(""),
+            datasets: [
+              {
+                data: Array(maxDataPoints).fill(0),
+                borderColor: "#6f42c1",
+                backgroundColor: "rgba(111, 66, 193, 0.1)",
+                fill: true,
+              },
+            ],
+          },
+        });
+
+        performanceCharts.pubsubLatency = new Chart(document.getElementById("pubsub-latency-chart"), {
+          ...chartConfig,
+          data: {
+            labels: Array(maxDataPoints).fill(""),
+            datasets: [
+              {
+                data: Array(maxDataPoints).fill(0),
+                borderColor: "#fd7e14",
+                backgroundColor: "rgba(253, 126, 20, 0.1)",
+                fill: true,
+              },
+            ],
+          },
+        });
+      }
+
+      // Load performance data from API
+      async function loadPerformanceData() {
+        try {
+          const response = await fetch("/api/performance");
+          if (response.ok) {
+            const data = await response.json();
+            updatePerformanceMetrics(data);
+          }
+        } catch (error) {
+          console.error("Failed to load performance data:", error);
+        }
+      }
+
+      // Update performance metrics and charts
+      function updatePerformanceMetrics(data) {
+        // Update cache metrics
+        document.getElementById("cache-rps").textContent = data.cache.requestsPerSecond.toFixed(2);
+        document.getElementById("cache-latency").textContent = data.cache.latencyP99.toFixed(2);
+        document.getElementById("cache-hit-rate").textContent = data.cache.hitRate.toFixed(1);
+
+        // Update pub/sub metrics
+        document.getElementById("pubsub-published").textContent = data.pubsub.messagesPublishedPerSecond.toFixed(2);
+        document.getElementById("pubsub-consumed").textContent = data.pubsub.messagesConsumedPerSecond.toFixed(2);
+        document.getElementById("pubsub-latency").textContent = data.pubsub.latencyP99.toFixed(2);
+
+        // Update system metrics
+        document.getElementById("system-connections").textContent = data.system.connections;
+        document.getElementById("system-memory").textContent = data.system.memoryUsage.toFixed(1);
+        document.getElementById("system-uptime").textContent = Math.floor(data.system.uptime / 1000);
+
+        // Update charts
+        updateChart(performanceCharts.cacheRps, data.cache.requestsPerSecond);
+        updateChart(performanceCharts.cacheLatency, data.cache.latencyP99);
+        updateChart(performanceCharts.cacheHitRate, data.cache.hitRate);
+        updateChart(performanceCharts.pubsubPublished, data.pubsub.messagesPublishedPerSecond);
+        updateChart(performanceCharts.pubsubConsumed, data.pubsub.messagesConsumedPerSecond);
+        updateChart(performanceCharts.pubsubLatency, data.pubsub.latencyP99);
+      }
+
+      // Update individual chart with new data point
+      function updateChart(chart, newValue) {
+        const data = chart.data.datasets[0].data;
+        data.shift(); // Remove first element
+        data.push(newValue); // Add new element
+        chart.update("none"); // Update without animation for better performance
+      }
+
+      // Handle pub/sub action change
+      function handlePubSubActionChange() {
+        const action = document.getElementById("pubsub-action").value;
+        const messageRow = document.getElementById("pubsub-message-row");
+
+        if (action === "PUBLISH") {
+          messageRow.style.display = "flex";
+        } else {
+          messageRow.style.display = "none";
+          document.getElementById("pubsub-message").value = "";
+        }
+      }
+
+      // Execute pub/sub command
+      async function executePubSubCommand() {
+        const action = document.getElementById("pubsub-action").value;
+        const channel = document.getElementById("pubsub-channel").value.trim();
+        const message = document.getElementById("pubsub-message").value.trim();
+
+        // Validate inputs
+        if (!channel) {
+          showPubSubResult("Error: Channel name is required", "error");
+          return;
+        }
+
+        if (action === "PUBLISH" && !message) {
+          showPubSubResult("Error: Message content is required for PUBLISH command", "error");
+          return;
+        }
+
+        // Format command
+        let command;
+        switch (action) {
+          case "SUBSCRIBE":
+            command = `SUBSCRIBE ${channel}`;
+            break;
+          case "PUBLISH":
+            command = `PUBLISH ${channel} "${message}"`;
+            break;
+          case "UNSUBSCRIBE":
+            command = `UNSUBSCRIBE ${channel}`;
+            break;
+          default:
+            showPubSubResult("Error: Invalid action selected", "error");
+            return;
+        }
+
+        // Show loading state
+        showPubSubResult(`Executing: ${command}`, "");
+
+        try {
+          const response = await fetch("/api/command", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ command }),
+          });
+
+          const result = await response.json();
+
+          if (result.success) {
+            showPubSubResult(`✓ ${command}\nResponse: ${result.response}`, "success");
+
+            // Add to message log for pub/sub commands
+            if (action === "SUBSCRIBE" || action === "UNSUBSCRIBE") {
+              addToMessageLog(`[${new Date().toLocaleTimeString()}] ${command} -> ${result.response}`);
+            } else if (action === "PUBLISH") {
+              addToMessageLog(
+                `[${new Date().toLocaleTimeString()}] Published to ${channel}: "${message}" -> ${
+                  result.response
+                } subscriber(s)`
+              );
+            }
+
+            // Refresh pub/sub data to update active channels
+            loadPubSubData();
+          } else {
+            showPubSubResult(`✗ ${command}\nError: ${result.error}`, "error");
+          }
+        } catch (error) {
+          showPubSubResult(`✗ ${command}\nNetwork Error: ${error.message}`, "error");
+        }
+      }
+
+      // Show pub/sub command result
+      function showPubSubResult(message, type) {
+        // Determine toast title based on type
+        let title = "Pub/Sub Command";
+        if (type === "success") {
+          title = "Command Successful";
+        } else if (type === "error") {
+          title = "Command Failed";
+        }
+
+        // Show toast notification
+        showToast(message, type, title);
+      }
+
+      // Add message to the message log
+      function addToMessageLog(message) {
+        messageLog.push(message);
+
+        // Keep only last 50 messages
+        if (messageLog.length > 50) {
+          messageLog.shift();
+        }
+
+        // Update message log display if it exists
+        const messageLogElement = document.getElementById("message-log");
+        if (messageLogElement) {
+          messageLogElement.textContent = messageLog.join("\n");
+          messageLogElement.scrollTop = messageLogElement.scrollHeight;
+        }
       }
 
       // Handle window beforeunload
