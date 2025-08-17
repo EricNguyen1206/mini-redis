@@ -41,14 +41,38 @@ class MiniRedisStore {
       this.expirations.delete(key);
       if (typeof onExpire === "function") onExpire(key);
     }, ms);
-    this.expirations.set(key, handle);
+    this.expirations.set(key, { handle, expireAt: Date.now() + ms });
     return 1;
   }
 
+  ttl(key) {
+    if (!this.store.has(key)) return -2; // Key doesn't exist
+    const expiration = this.expirations.get(key);
+    if (!expiration) return -1; // Key exists but has no expiration
+    const remaining = Math.max(0, expiration.expireAt - Date.now());
+    return Math.ceil(remaining / 1000); // Return seconds
+  }
+
+  keys(pattern = "*") {
+    const allKeys = Array.from(this.store.keys());
+    if (pattern === "*") {
+      return allKeys;
+    }
+
+    // Simple pattern matching - convert Redis pattern to regex
+    const regexPattern = pattern
+      .replace(/\*/g, ".*")
+      .replace(/\?/g, ".")
+      .replace(/\[([^\]]+)\]/g, "[$1]");
+
+    const regex = new RegExp(`^${regexPattern}$`);
+    return allKeys.filter((key) => regex.test(key));
+  }
+
   _clearExpiration(key) {
-    const h = this.expirations.get(key);
-    if (h) {
-      clearTimeout(h);
+    const expiration = this.expirations.get(key);
+    if (expiration) {
+      clearTimeout(expiration.handle || expiration); // Support both old and new format
       this.expirations.delete(key);
     }
   }

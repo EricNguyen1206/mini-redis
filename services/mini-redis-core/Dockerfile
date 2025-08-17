@@ -5,13 +5,20 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Create non-root user for security
-RUN adduser -S miniredis -u 1001
+RUN addgroup -g 1001 miniredis && \
+  adduser -S -u 1001 -G miniredis miniredis
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies (none currently, but ready for future)
-RUN npm ci --only=production && npm cache clean --force
+# Install dependencies (skip if no dependencies exist)
+# Use npm install instead of npm ci for zero-dependency packages
+RUN if [ -f package-lock.json ]; then \
+  npm ci --only=production; \
+  else \
+  npm install --only=production; \
+  fi && \
+  npm cache clean --force
 
 # Copy source code
 COPY . .
@@ -25,9 +32,9 @@ USER miniredis
 # Expose Redis port
 EXPOSE 6380
 
-# Health check
+# Health check using RESP protocol
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD node -e "const net = require('net'); const client = net.connect(6380, 'localhost', () => { client.write('PING\\n'); client.on('data', () => { client.end(); process.exit(0); }); }); client.on('error', () => process.exit(1));"
+  CMD node healthcheck.js
 
 # Start the core service
 CMD ["node", "index.js"]

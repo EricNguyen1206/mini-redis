@@ -110,28 +110,54 @@ mini-redis/
 
 ### 🐳 Docker Quick Start (Recommended)
 
-The easiest way to get started with Mini-Redis microservices:
+Mini-Redis offers flexible deployment options to match your needs:
+
+#### Option 1: Lightweight Redis Server (Standalone)
 
 ```bash
 # Clone the repository
 git clone https://github.com/EricNguyen1206/mini-redis.git
 cd mini-redis
 
-# Build and start all services
+# Start standalone Redis server (no web interface)
 ./docker-run.sh start
 
-# Access the services
-# 🌐 Web Dashboard: http://localhost:8080
+# Access Redis directly
 # 🔌 Redis Protocol: localhost:6380
+redis-cli -p 6380
+```
 
-# Run performance benchmarks
-./docker-run.sh benchmark
+#### Option 2: Redis with Web Monitoring
 
-# Run stress tests
-./docker-run.sh stress
+```bash
+# Start Redis server with web monitoring dashboard
+./docker-run.sh start-monitored
 
-# Connect with Redis CLI
-./docker-run.sh cli
+# Access both services
+# 🔌 Redis Protocol: localhost:6380
+# 🌐 Web Dashboard: http://localhost:8080
+```
+
+#### Option 3: Add Monitoring to Running Server
+
+```bash
+# Start with lightweight server
+./docker-run.sh start
+
+# Later, add web monitoring without restarting Redis
+./docker-run.sh add-insight
+
+# Remove monitoring anytime (keeps Redis running)
+./docker-run.sh remove-insight
+```
+
+#### Performance Testing
+
+```bash
+# Run performance benchmarks against any running Redis
+./docker-run.sh benchmark      # Basic tests
+./docker-run.sh stress         # High-load tests
+./docker-run.sh pubsub         # Pub/Sub tests
 ```
 
 ### 🔧 Manual Setup (Development)
@@ -169,7 +195,9 @@ node index.js basic
 
 ## 🔧 Service Configuration
 
-### Core Service (mini-redis-core)
+### Core Service (mini-redis-core) - Fully Standalone
+
+The core service runs completely independently with no dependencies:
 
 ```bash
 # Environment variables
@@ -178,18 +206,27 @@ NODE_ENV=production      # Environment mode
 
 # Command line options
 node index.js --port 6380 --help
+
+# Standalone deployment - works with any Redis client
+redis-cli -p 6380
+node-redis client connecting to localhost:6380
 ```
 
-### Insight Service (mini-redis-insight)
+### Insight Service (mini-redis-insight) - Optional Add-on
+
+The insight service is completely optional and connects to any running core service:
 
 ```bash
 # Environment variables
 HTTP_PORT=8080           # Web interface port
-REDIS_HOST=mini-redis-core  # Core service host
+REDIS_HOST=mini-redis-core  # Core service host (can be any Redis server)
 REDIS_PORT=6380          # Core service port
 
 # Command line options
 node index.js --port 8080 --redis-host localhost --redis-port 6380
+
+# Can connect to external Redis servers too
+REDIS_HOST=my-redis-server.com REDIS_PORT=6379 node index.js
 ```
 
 ### Benchmark Service (mini-redis-benchmark)
@@ -326,6 +363,43 @@ Mini-Redis implements the following Redis-compatible commands:
 - **SUBSCRIBE channel [channel ...]** - Subscribe to channels
 - **UNSUBSCRIBE [channel ...]** - Unsubscribe from channels
 - **PUBLISH channel message** - Publish message to channel
+
+## 🎯 Deployment Flexibility
+
+Mini-Redis is designed for maximum deployment flexibility:
+
+### 🏗️ Architecture Benefits
+
+- **🎯 Standalone Core**: Redis server runs independently, no dependencies
+- **🔌 Plug-and-Play Monitoring**: Add/remove web interface without restarting Redis
+- **📊 Optional Services**: Only run what you need
+- **🔄 Hot-Swappable**: Change configuration without downtime
+- **🐳 Container-Ready**: Each service in its own container
+
+### 📋 Deployment Scenarios
+
+| Scenario        | Services               | Use Case                                   |
+| --------------- | ---------------------- | ------------------------------------------ |
+| **Lightweight** | `mini-redis-core` only | Production Redis server, minimal resources |
+| **Development** | `core` + `insight`     | Local development with web monitoring      |
+| **Testing**     | `core` + `benchmark`   | Performance testing and validation         |
+| **Full Stack**  | All services           | Complete Redis solution with monitoring    |
+
+### 🔄 Runtime Flexibility
+
+```bash
+# Start minimal
+./docker-run.sh start                    # Just Redis server
+
+# Add monitoring later (no restart needed)
+./docker-run.sh add-insight             # Add web dashboard
+
+# Remove monitoring (keep Redis running)
+./docker-run.sh remove-insight          # Remove web dashboard
+
+# Add performance testing
+./docker-run.sh benchmark               # Test current setup
+```
 
 ## 🚀 Performance Characteristics
 

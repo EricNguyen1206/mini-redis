@@ -53,32 +53,41 @@ class Orchestrator {
   }
 
   async listen() {
+    // Always start HTTP server first - insight service should be available even if core is not
+    console.log(`🚀 Starting Mini-Redis Insight Service...`);
+    console.log(`🎯 Target Redis core: ${this.redisHost}:${this.redisPort}`);
+
+    // Start HTTP server
+    await new Promise((resolve) => {
+      this.httpServer.listen(this.httpPort, () => {
+        console.log(`🌐 Mini-Redis Insight HTTP server listening on 127.0.0.1:${this.httpPort}`);
+        console.log(`📊 Web interface available at http://127.0.0.1:${this.httpPort}`);
+        resolve();
+      });
+    });
+
+    // Try to connect to Redis core service (non-blocking)
+    this.connectToRedisCore();
+  }
+
+  /**
+   * Attempt to connect to Redis core service with automatic retries
+   */
+  async connectToRedisCore() {
     try {
-      // Connect to Redis core service first
-      console.log(`🔌 Connecting to Redis core at ${this.redisHost}:${this.redisPort}...`);
+      console.log(`🔌 Attempting to connect to Redis core at ${this.redisHost}:${this.redisPort}...`);
       await this.redisClient.connect();
-      console.log(`✅ Connected to Redis core service`);
+      console.log(`✅ Connected to Redis core service - full functionality available`);
 
-      // Start HTTP server
-      return new Promise((resolve) => {
-        this.httpServer.listen(this.httpPort, () => {
-          console.log(`🌐 Mini-Redis Insight HTTP server listening on 127.0.0.1:${this.httpPort}`);
-          console.log(`📊 Web interface available at http://127.0.0.1:${this.httpPort}`);
-          resolve();
-        });
-      });
+      // Start performance monitoring once connected
+      this.performanceMonitor.startMonitoring();
     } catch (error) {
-      console.error(`❌ Failed to connect to Redis core: ${error.message}`);
-      console.log(`🔄 Starting HTTP server anyway (will retry Redis connection automatically)`);
+      console.log(`⚠️  Redis core not available: ${error.message}`);
+      console.log(`🔄 Web interface running in limited mode - will retry connection automatically`);
+      console.log(`💡 Start the core service with: docker compose up -d mini-redis-core`);
 
-      // Start HTTP server even if Redis connection fails
-      return new Promise((resolve) => {
-        this.httpServer.listen(this.httpPort, () => {
-          console.log(`🌐 Mini-Redis Insight HTTP server listening on 127.0.0.1:${this.httpPort}`);
-          console.log(`⚠️  Redis core not available - some features may be limited`);
-          resolve();
-        });
-      });
+      // The Redis client will handle automatic reconnection attempts
+      // Web interface remains functional with appropriate error states
     }
   }
 
@@ -100,19 +109,53 @@ class Orchestrator {
     }
   }
 
-  notifyWebClients() {
-    const data = [];
-    for (const [key, value] of this.tcpServer.kv.store.entries()) {
-      const expiration = this.tcpServer.kv.expirations.get(key);
-      let ttl = null;
-      if (expiration) {
-        const now = Date.now();
-        const expirationTime = expiration._idleStart ? expiration._idleStart + expiration._idleTimeout : now + 1000;
-        ttl = Math.max(0, Math.ceil((expirationTime - now) / 1000));
+  async notifyWebClients() {
+    try {
+      if (!this.redisClient.isConnected()) {
+        // If not connected to Redis core, send empty data with connection status
+        this.ws.broadcastToWebClients(
+          JSON.stringify({
+            type: "data_update",
+            data: [],
+            connected: false,
+            message: "Redis core service not available",
+          })
+        );
+        return;
       }
-      data.push({ key, value, ttl, type: "string", timestamp: new Date().toISOString() });
+
+      // Get data from Redis core via client
+      const redisData = await this.redisClient.getAllData();
+      const data = [];
+
+      for (const [key, info] of Object.entries(redisData)) {
+        data.push({
+          key,
+          value: info.value,
+          ttl: info.ttl,
+          type: "string",
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      this.ws.broadcastToWebClients(
+        JSON.stringify({
+          type: "data_update",
+          data,
+          connected: true,
+        })
+      );
+    } catch (error) {
+      console.error("Error notifying web clients:", error.message);
+      this.ws.broadcastToWebClients(
+        JSON.stringify({
+          type: "data_update",
+          data: [],
+          connected: false,
+          error: error.message,
+        })
+      );
     }
-    this.ws.broadcastToWebClients(JSON.stringify({ type: "data_update", data }));
   }
 }
 

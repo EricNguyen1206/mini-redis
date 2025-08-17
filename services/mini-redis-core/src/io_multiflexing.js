@@ -145,8 +145,10 @@ class IOMultiplexer extends EventEmitter {
         // Message was chunked - enqueue each chunk
         let enqueuedChunks = 0;
         for (const chunk of processed.chunks) {
+          // Don't add newline if message already ends with RESP terminator
+          const needsNewline = !chunk.endsWith("\r\n") && !chunk.endsWith("\n");
           const chunkMessage = {
-            content: chunk.endsWith("\n") ? chunk : chunk + "\n",
+            content: needsNewline ? chunk + "\n" : chunk,
             timestamp: Date.now(),
             priority,
             size: Buffer.byteLength(chunk, "utf8"),
@@ -170,7 +172,9 @@ class IOMultiplexer extends EventEmitter {
         this.globalMetrics.totalBytes += originalSize;
       } else {
         // Single message (possibly compressed)
-        const finalContent = processed.message.endsWith("\n") ? processed.message : processed.message + "\n";
+        // Don't add newline if message already ends with RESP terminator
+        const needsNewline = !processed.message.endsWith("\r\n") && !processed.message.endsWith("\n");
+        const finalContent = needsNewline ? processed.message + "\n" : processed.message;
         const finalMessage = {
           content: processed.metadata.compressed ? `COMPRESSED:${finalContent}` : finalContent,
           timestamp: Date.now(),
@@ -201,8 +205,10 @@ class IOMultiplexer extends EventEmitter {
       }
     } catch (err) {
       // Message processing failed, enqueue original message
+      // Don't add newline if message already ends with RESP terminator
+      const needsNewline = !line.endsWith("\r\n") && !line.endsWith("\n");
       const message = {
-        content: line.endsWith("\n") ? line : line + "\n",
+        content: needsNewline ? line + "\n" : line,
         timestamp: Date.now(),
         priority,
         size: originalSize,

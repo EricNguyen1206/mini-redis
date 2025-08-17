@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { RESPFormatter, RESPParser } = require("./resp");
 
 /** Represents a connected TCP client */
 class TCPClient {
@@ -8,6 +9,7 @@ class TCPClient {
     this.id = crypto.randomUUID();
     this.buffer = "";
     this.subscribed = new Set();
+    this.respParser = new RESPParser();
 
     socket.setEncoding("utf8");
     socket.on("data", (chunk) => this._onData(chunk));
@@ -23,14 +25,30 @@ class TCPClient {
     }
   }
 
-  send(line) {
+  send(data, type = "bulk") {
+    let response;
+    if (
+      typeof data === "string" &&
+      (data.startsWith("+") ||
+        data.startsWith("-") ||
+        data.startsWith(":") ||
+        data.startsWith("$") ||
+        data.startsWith("*"))
+    ) {
+      // Already RESP formatted
+      response = data;
+    } else {
+      // Format using RESP
+      response = RESPFormatter.format(data, type);
+    }
+
     // Use the I/O multiplexer for efficient, non-blocking writes
     if (this.server && this.server.mux) {
-      this.server.mux.enqueue(this.socket, line);
+      this.server.mux.enqueue(this.socket, response);
     } else {
       // Fallback to direct write if multiplexer is not available
       try {
-        this.socket.write(line + "\n");
+        this.socket.write(response);
       } catch (_) {
         // ignore broken pipe
       }
@@ -38,15 +56,19 @@ class TCPClient {
   }
 
   _onData(chunk) {
-    this.buffer += chunk;
-    // Process complete lines
-    let idx;
-    while ((idx = this.buffer.search(/\r?\n/)) !== -1) {
-      const line = this.buffer.slice(0, idx);
-      this.buffer = this.buffer.slice(idx + (this.buffer[idx] === "\r" ? 2 : 1));
-      const trimmed = line.trim();
-      if (trimmed.length === 0) continue;
-      this.server.handleCommand(this, trimmed);
+    // Feed data to RESP parser
+    this.respParser.feed(chunk);
+
+    // Process complete commands
+    const commands = this.respParser.parse();
+    for (const command of commands) {
+      if (Array.isArray(command) && command.length > 0) {
+        this.server.handleCommand(this, command);
+      } else if (typeof command === "string" && command.trim().length > 0) {
+        // Handle inline commands (fallback for simple text protocol)
+        const args = command.trim().split(/\s+/);
+        this.server.handleCommand(this, args);
+      }
     }
   }
 

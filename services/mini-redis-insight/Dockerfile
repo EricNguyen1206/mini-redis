@@ -5,13 +5,20 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Create non-root user for security
-RUN adduser -S miniredis -u 1001
+RUN addgroup -g 1001 miniredis && \
+  adduser -S -u 1001 -G miniredis miniredis
 
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies (none currently, but ready for future)
-RUN npm ci --only=production && npm cache clean --force
+# Install dependencies (skip if no dependencies exist)
+# Use npm install instead of npm ci for zero-dependency packages
+RUN if [ -f package-lock.json ]; then \
+  npm ci --only=production; \
+  else \
+  npm install --only=production; \
+  fi && \
+  npm cache clean --force
 
 # Copy source code and static files
 COPY . .

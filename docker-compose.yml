@@ -1,19 +1,32 @@
 # Mini-Redis Microservices Architecture
 # =====================================
-# This docker-compose file orchestrates the three Mini-Redis microservices:
-# 1. mini-redis-core: High-performance Redis-compatible server
-# 2. mini-redis-insight: Web UI and monitoring dashboard
-# 3. mini-redis-benchmark: Performance testing and benchmarking tools
+# This docker-compose file orchestrates the Mini-Redis microservices with maximum flexibility:
+#
+# STANDALONE DEPLOYMENT:
+# - mini-redis-core: Fully self-contained Redis-compatible server
+#
+# MONITORED DEPLOYMENT:
+# - mini-redis-core + mini-redis-insight: Redis server with web monitoring
+#
+# TESTING DEPLOYMENT:
+# - Add mini-redis-benchmark: Performance testing tools
+#
+# Each service can run independently and be added/removed without affecting others.
 
 services:
-  # Core Redis Service - High-performance Redis-compatible server
+  # ============================================================================
+  # CORE SERVICE - Fully Standalone Redis-Compatible Server
+  # ============================================================================
+  # This service runs independently and provides complete Redis functionality.
+  # No dependencies on other services. Can be used as a drop-in Redis replacement.
+
   mini-redis-core:
     build:
       context: ./services/mini-redis-core
       dockerfile: Dockerfile
     container_name: mini-redis-core
     ports:
-      - "6380:6380"  # Redis protocol port
+      - "6380:6380"  # Redis protocol port - connect with any Redis client
     environment:
       - NODE_ENV=production
       - REDIS_PORT=6380
@@ -27,7 +40,13 @@ services:
       retries: 3
       start_period: 10s
 
-  # Insight Service - Web UI and monitoring dashboard
+  # ============================================================================
+  # INSIGHT SERVICE - Optional Plug-and-Play Web Monitoring
+  # ============================================================================
+  # This service is completely optional and can be added to any running core service.
+  # Provides web dashboard, real-time monitoring, and interactive command execution.
+  # Gracefully handles cases where core service is unavailable.
+
   mini-redis-insight:
     build:
       context: ./services/mini-redis-insight
@@ -42,10 +61,10 @@ services:
       - REDIS_PORT=6380
     networks:
       - mini-redis-network
-    depends_on:
-      mini-redis-core:
-        condition: service_healthy
+    # NO depends_on - can start independently and connect when core is available
     restart: unless-stopped
+    profiles:
+      - insight  # Optional service - only starts when explicitly requested
     healthcheck:
       test: ["CMD", "node", "-e", "const http = require('http'); const req = http.request('http://localhost:8080/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', () => process.exit(1)); req.end();"]
       interval: 30s
@@ -53,7 +72,12 @@ services:
       retries: 3
       start_period: 15s
 
-  # Benchmark Service - Performance testing tools
+  # ============================================================================
+  # BENCHMARK SERVICES - Optional Performance Testing Tools
+  # ============================================================================
+  # These services are completely optional and can test any running core service.
+  # They will wait and retry if the core service is not immediately available.
+
   mini-redis-benchmark:
     build:
       context: ./services/mini-redis-benchmark
@@ -64,14 +88,11 @@ services:
       - REDIS_PORT=6380
     networks:
       - mini-redis-network
-    depends_on:
-      mini-redis-core:
-        condition: service_healthy
+    # NO depends_on - benchmarks will handle connection retries internally
     profiles:
       - benchmark
     command: ["node", "index.js", "basic"]
 
-  # Additional benchmark scenarios
   mini-redis-benchmark-stress:
     build:
       context: ./services/mini-redis-benchmark
@@ -82,9 +103,6 @@ services:
       - REDIS_PORT=6380
     networks:
       - mini-redis-network
-    depends_on:
-      mini-redis-core:
-        condition: service_healthy
     profiles:
       - stress
     command: ["node", "index.js", "stress", "--pool-size", "20"]
@@ -99,9 +117,6 @@ services:
       - REDIS_PORT=6380
     networks:
       - mini-redis-network
-    depends_on:
-      mini-redis-core:
-        condition: service_healthy
     profiles:
       - pubsub
     command: ["node", "index.js", "pubsub", "--pool-size", "15"]
@@ -116,9 +131,6 @@ services:
       - REDIS_PORT=6380
     networks:
       - mini-redis-network
-    depends_on:
-      mini-redis-core:
-        condition: service_healthy
     profiles:
       - benchmark-all
     command: ["node", "index.js", "all", "--pool-size", "25"]
@@ -128,8 +140,7 @@ services:
     image: redis:7-alpine
     container_name: redis-cli-client
     depends_on:
-      mini-redis-core:
-        condition: service_healthy
+      - mini-redis-core
     networks:
       - mini-redis-network
     profiles:

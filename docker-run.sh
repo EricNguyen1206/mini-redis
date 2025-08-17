@@ -58,47 +58,102 @@ build() {
     print_success "All services built successfully!"
 }
 
-# Function to start core services (core + insight)
+# Function to start core service only (standalone Redis server)
 start() {
-    print_header "Starting Mini-Redis Core Services"
-    print_service "Starting mini-redis-core..."
-    docker compose up -d mini-redis-core
-
-    print_service "Starting mini-redis-insight..."
-    docker compose up -d mini-redis-insight
-
-    print_status "Waiting for services to be ready..."
-    sleep 8
-
-    # Check if services are running
-    if docker compose ps mini-redis-core | grep -q "Up" && docker compose ps mini-redis-insight | grep -q "Up"; then
-        print_success "Mini-Redis microservices are running!"
-        print_status "🌐 Web interface: http://localhost:8080"
-        print_status "🔌 Redis protocol: localhost:6380"
-        print_status "📊 Services: core + insight"
-    else
-        print_error "Failed to start Mini-Redis services"
-        docker compose logs
-        exit 1
-    fi
-}
-
-# Function to start only the core service
-start-core() {
-    print_header "Starting Mini-Redis Core Only"
+    print_header "Starting Mini-Redis Core Service (Standalone)"
     print_service "Starting mini-redis-core..."
     docker compose up -d mini-redis-core
 
     print_status "Waiting for core service to be ready..."
     sleep 5
 
+    # Check if core service is running
     if docker compose ps mini-redis-core | grep -q "Up"; then
-        print_success "Mini-Redis core is running!"
+        print_success "Mini-Redis core service is running!"
         print_status "🔌 Redis protocol: localhost:6380"
+        print_status "📊 Mode: Standalone (no web interface)"
+        print_status ""
+        print_status "💡 To add web monitoring: ./docker-run.sh add-insight"
+        print_status "💡 Connect with Redis CLI: ./docker-run.sh cli"
     else
-        print_error "Failed to start Mini-Redis core"
+        print_error "Failed to start Mini-Redis core service"
         docker compose logs mini-redis-core
         exit 1
+    fi
+}
+
+# Function to start core + insight services (monitored deployment)
+start-monitored() {
+    print_header "Starting Mini-Redis with Web Monitoring"
+    print_service "Starting mini-redis-core..."
+    docker compose up -d mini-redis-core
+
+    print_service "Starting mini-redis-insight..."
+    docker compose --profile insight up -d mini-redis-insight
+
+    print_status "Waiting for services to be ready..."
+    sleep 8
+
+    # Check if services are running
+    if docker compose ps mini-redis-core | grep -q "Up"; then
+        print_success "Mini-Redis services are running!"
+        print_status "🔌 Redis protocol: localhost:6380"
+
+        if docker compose ps mini-redis-insight | grep -q "Up"; then
+            print_status "🌐 Web interface: http://localhost:8080"
+            print_status "📊 Mode: Monitored (core + web dashboard)"
+        else
+            print_warning "⚠️  Web interface failed to start, but core is running"
+            print_status "📊 Mode: Standalone (core only)"
+        fi
+    else
+        print_error "Failed to start Mini-Redis core service"
+        docker compose logs
+        exit 1
+    fi
+}
+
+# Function to add insight service to running core (plug-and-play)
+add-insight() {
+    print_header "Adding Web Monitoring to Running Core Service"
+
+    # Check if core is running
+    if ! docker compose ps mini-redis-core | grep -q "Up"; then
+        print_error "Mini-Redis core service is not running!"
+        print_status "Start the core service first: ./docker-run.sh start"
+        exit 1
+    fi
+
+    print_service "Adding mini-redis-insight to running core..."
+    docker compose --profile insight up -d mini-redis-insight
+
+    print_status "Waiting for insight service to connect..."
+    sleep 5
+
+    if docker compose ps mini-redis-insight | grep -q "Up"; then
+        print_success "Web monitoring added successfully!"
+        print_status "🌐 Web interface: http://localhost:8080"
+        print_status "📊 Mode: Monitored (core + web dashboard)"
+    else
+        print_error "Failed to start insight service"
+        docker compose logs mini-redis-insight
+        exit 1
+    fi
+}
+
+# Function to remove insight service (keep core running)
+remove-insight() {
+    print_header "Removing Web Monitoring (Keep Core Running)"
+
+    if docker compose ps mini-redis-insight | grep -q "Up"; then
+        print_service "Stopping mini-redis-insight..."
+        docker compose stop mini-redis-insight
+        docker compose rm -f mini-redis-insight
+        print_success "Web monitoring removed!"
+        print_status "📊 Mode: Standalone (core only)"
+        print_status "🔌 Redis protocol: localhost:6380"
+    else
+        print_warning "Insight service is not running"
     fi
 }
 
@@ -106,7 +161,7 @@ start-core() {
 benchmark() {
     print_header "Running Basic Benchmark Tests"
     print_status "Running basic performance tests..."
-    docker compose --profile benchmark up --rm mini-redis-benchmark
+    docker compose --profile benchmark up --remove-orphans mini-redis-benchmark
     print_success "Basic benchmark completed!"
 }
 
@@ -114,7 +169,7 @@ benchmark() {
 stress() {
     print_header "Running Stress Tests"
     print_status "Running high-load stress tests..."
-    docker compose --profile stress up --rm mini-redis-benchmark-stress
+    docker compose --profile stress up --remove-orphans mini-redis-benchmark-stress
     print_success "Stress tests completed!"
 }
 
@@ -122,7 +177,7 @@ stress() {
 pubsub() {
     print_header "Running Pub/Sub Tests"
     print_status "Running pub/sub performance tests..."
-    docker compose --profile pubsub up --rm mini-redis-benchmark-pubsub
+    docker compose --profile pubsub up --remove-orphans mini-redis-benchmark-pubsub
     print_success "Pub/Sub tests completed!"
 }
 
@@ -130,7 +185,7 @@ pubsub() {
 benchmark-all() {
     print_header "Running All Benchmark Tests"
     print_status "Running comprehensive benchmark suite..."
-    docker compose --profile benchmark-all up --rm mini-redis-benchmark-all
+    docker compose --profile benchmark-all up --remove-orphans mini-redis-benchmark-all
     print_success "All benchmarks completed!"
 }
 
@@ -200,16 +255,18 @@ clean() {
 
 # Function to show help
 show_help() {
-    print_header "Mini-Redis Microservices Management"
+    print_header "Mini-Redis Flexible Microservices Management"
     echo ""
     echo "Usage: $0 [COMMAND] [OPTIONS]"
     echo ""
     echo "🏗️  Build Commands:"
     echo "  build              Build all service images"
     echo ""
-    echo "🚀 Service Commands:"
-    echo "  start              Start core + insight services"
-    echo "  start-core         Start only the core Redis service"
+    echo "🚀 Deployment Commands:"
+    echo "  start              Start standalone Redis server (core only)"
+    echo "  start-monitored    Start Redis server with web monitoring"
+    echo "  add-insight        Add web monitoring to running core service"
+    echo "  remove-insight     Remove web monitoring (keep core running)"
     echo "  stop               Stop all services"
     echo "  status             Show service status and health"
     echo ""
@@ -225,21 +282,31 @@ show_help() {
     echo "  clean              Clean up Docker resources"
     echo "  help               Show this help message"
     echo ""
-    echo "📋 Examples:"
-    echo "  $0 start                    # Start core + insight services"
-    echo "  $0 start-core               # Start only core service"
-    echo "  $0 benchmark               # Run performance tests"
-    echo "  $0 stress                  # Run stress tests"
-    echo "  $0 cli                     # Connect with Redis CLI"
-    echo "  $0 logs mini-redis-core    # View core service logs"
+    echo "🎯 Deployment Scenarios:"
     echo ""
-    echo "🚀 Quick Start:"
-    echo "  $0 build && $0 start && $0 benchmark"
+    echo "  📦 Lightweight Redis Server:"
+    echo "    $0 start                    # Standalone Redis (no web interface)"
+    echo ""
+    echo "  📊 Redis with Monitoring:"
+    echo "    $0 start-monitored          # Redis + web dashboard"
+    echo ""
+    echo "  🔄 Add Monitoring Later:"
+    echo "    $0 start                    # Start Redis only"
+    echo "    $0 add-insight              # Add web monitoring"
+    echo ""
+    echo "  🧪 Performance Testing:"
+    echo "    $0 start                    # Start Redis"
+    echo "    $0 benchmark                # Run performance tests"
     echo ""
     echo "🏗️  Architecture:"
-    echo "  mini-redis-core     - High-performance Redis server (port 6380)"
-    echo "  mini-redis-insight  - Web monitoring dashboard (port 8080)"
-    echo "  mini-redis-benchmark - Performance testing tools"
+    echo "  mini-redis-core     - Standalone Redis server (port 6380)"
+    echo "  mini-redis-insight  - Optional web dashboard (port 8080)"
+    echo "  mini-redis-benchmark - Optional testing tools"
+    echo ""
+    echo "💡 Pro Tips:"
+    echo "  • Core service runs independently - no dependencies"
+    echo "  • Insight service is plug-and-play - add/remove anytime"
+    echo "  • Connect with any Redis client: redis-cli -p 6380"
 }
 
 # Main script logic
@@ -254,9 +321,15 @@ main() {
             build
             start
             ;;
-        start-core)
+        start-monitored)
             build
-            start-core
+            start-monitored
+            ;;
+        add-insight)
+            add-insight
+            ;;
+        remove-insight)
+            remove-insight
             ;;
         benchmark)
             benchmark

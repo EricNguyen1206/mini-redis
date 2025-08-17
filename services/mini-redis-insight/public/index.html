@@ -47,6 +47,48 @@
         margin-top: 0.25rem;
       }
 
+      .header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .connection-status {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+      }
+
+      .connection-status.connected {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+
+      .connection-status.disconnected {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+
+      .connection-status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+      }
+
+      .connection-status.connected .connection-status-dot {
+        background: #28a745;
+      }
+
+      .connection-status.disconnected .connection-status-dot {
+        background: #dc3545;
+      }
+
       .main-content {
         padding: 2rem 0;
       }
@@ -817,8 +859,16 @@
   <body>
     <div class="header">
       <div class="container">
-        <h1>🎲 Mini Redis Insight</h1>
-        <div class="subtitle">Real-time Redis management interface</div>
+        <div class="header-content">
+          <div>
+            <h1>🎲 Mini Redis Insight</h1>
+            <div class="subtitle">Real-time Redis management interface</div>
+          </div>
+          <div class="connection-status disconnected" id="connection-status">
+            <div class="connection-status-dot"></div>
+            <span id="connection-status-text">Connecting...</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1293,6 +1343,8 @@
               const data = JSON.parse(event.data);
               if (data.type === "data_update") {
                 updateDataTable(data.data);
+                // Update connection status indicator
+                updateConnectionStatus(data.connected, data.message || data.error);
               } else if (data.type === "performance") {
                 updatePerformanceMetrics(data.data);
               }
@@ -1317,20 +1369,6 @@
           console.error("WebSocket initialization error:", error);
           isConnected = false;
           updateConnectionStatus(false);
-        }
-      }
-
-      // Update connection status indicator
-      function updateConnectionStatus(connected) {
-        const statusDot = document.getElementById("connection-status");
-        const statusText = document.getElementById("connection-text");
-
-        if (connected) {
-          statusDot.style.background = "#28a745";
-          statusText.textContent = "Connected (Real-time)";
-        } else {
-          statusDot.style.background = "#ffc107";
-          statusText.textContent = "Polling mode";
         }
       }
 
@@ -1426,6 +1464,20 @@
           errorEl.textContent = `Error loading data: ${error.message}`;
           tableEl.style.display = "none";
           noDataEl.style.display = "none";
+        }
+      }
+
+      // Update connection status indicator
+      function updateConnectionStatus(connected, message) {
+        const statusElement = document.getElementById("connection-status");
+        const statusText = document.getElementById("connection-status-text");
+
+        if (connected) {
+          statusElement.className = "connection-status connected";
+          statusText.textContent = "Connected to Redis Core";
+        } else {
+          statusElement.className = "connection-status disconnected";
+          statusText.textContent = message || "Redis Core Unavailable";
         }
       }
 
