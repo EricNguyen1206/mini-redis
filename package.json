@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "node index.js",
+    "start:monitor": "node index.js",
     "test": "node tests/test_performance_integration.js",
     "demo": "node tests/demo_improvements.js"
   },

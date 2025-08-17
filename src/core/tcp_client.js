@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 
 /** Represents a connected TCP client */
-class Client {
+class TCPClient {
   constructor(socket, server) {
     this.socket = socket;
     this.server = server;
@@ -13,8 +13,8 @@ class Client {
     socket.on("data", (chunk) => this._onData(chunk));
     socket.on("close", () => this._onClose());
     socket.on("error", (err) => {
-      // Could log; keep alive unless fatal
-      // console.error(`Client ${this.id} error:`, err.message);
+      // Log; keep alive unless fatal
+      console.error(`TCP ${this.id} error:`, err.message);
     });
 
     // Register socket with the I/O multiplexer for efficient writes
@@ -56,4 +56,4 @@ class Client {
   }
 }
 
-module.exports = Client;
+module.exports = TCPClient;

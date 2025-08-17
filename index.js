@@ -25,10 +25,12 @@
  * @license MIT
  */
 
-const MiniRedisServer = require("./main");
+const Orchestrator = require("./src/monitoring/orchestrator");
+const TCPServer = require("./src/core/tcp_server");
 
 // Parse command line arguments
 const args = process.argv.slice(2);
+const isMonitor = args.includes("--monitor");
 let tcpPort = process.env.PORT || 6380;
 let httpPort = process.env.HTTP_PORT || 8080;
 
@@ -52,6 +54,7 @@ Usage: node index.js [options]
 Options:
   -p, --port <port>       TCP server port (default: 6380)
   -h, --http-port <port>  HTTP server port (default: 8080)
+  --monitor               Enable web interface and monitoring
   --help                  Show this help message
 
 Environment Variables:
@@ -77,6 +80,9 @@ Redis Compatibility:
       const packageJson = require("./package.json");
       console.log(`Mini-Redis Server v${packageJson.version}`);
       process.exit(0);
+    case "--monitor":
+      // Monitor flag is already handled above, just skip it here
+      break;
     default:
       if (args[i].startsWith("-")) {
         console.error(`Unknown option: ${args[i]}`);
@@ -128,8 +134,13 @@ async function startServer() {
     console.log(`🔗 Web Interface: http://localhost:${httpPort}`);
     console.log("");
 
-    const server = new MiniRedisServer({ port: tcpPort, httpPort: httpPort });
-    await server.listen();
+    const core = new TCPServer({ port: tcpPort });
+    await core.listen();
+
+    if (isMonitor) {
+      const orch = new Orchestrator(httpPort, core);
+      await orch.listen();
+    }
   } catch (error) {
     console.error("❌ Failed to start server:", error.message);
     process.exit(1);
