@@ -1461,7 +1461,7 @@
             row.innerHTML = `
                         <td><code>${escapeHtml(item.key)}</code></td>
                         <td><code>${escapeHtml(item.value)}</code></td>
-                        <td>${item.type}</td>
+                        <td>${escapeHtml(String(item.type))}</td>
                         <td>${ttlDisplay}</td>
                     `;
 
