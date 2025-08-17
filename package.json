@@ -6,8 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "start:monitor": "node index.js",
-    "test": "node tests/test_performance_integration.js",
-    "demo": "node tests/demo_improvements.js"
+    "test": "node tests/test_performance_integration.js"
   },
   "keywords": [
     "redis",

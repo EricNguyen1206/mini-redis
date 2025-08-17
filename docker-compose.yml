@@ -1,0 +1,66 @@
+services:
+  mini-redis:
+    build: .
+    container_name: mini-redis-server
+    ports:
+      - "6380:6380"  # Redis protocol port
+      - "8080:8080"  # Web interface port
+    environment:
+      - NODE_ENV=production
+    networks:
+      - mini-redis-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "const net = require('net'); const client = net.connect(6380, 'localhost', () => { client.write('PING\\n'); client.on('data', () => { client.end(); process.exit(0); }); }); client.on('error', () => process.exit(1));"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  redis-benchmark:
+    image: redis:7-alpine
+    container_name: redis-benchmark-client
+    depends_on:
+      mini-redis:
+        condition: service_healthy
+    networks:
+      - mini-redis-network
+    profiles:
+      - benchmark
+    command: >
+      sh -c "
+        echo 'Waiting for Mini-Redis to be ready...' &&
+        sleep 5 &&
+        echo 'Starting Redis benchmark tests...' &&
+        echo '=== Basic Performance Test ===' &&
+        redis-benchmark -h mini-redis -p 6380 -t set,get -n 10000 -c 50 -d 64 &&
+        echo '=== Pipeline Test ===' &&
+        redis-benchmark -h mini-redis -p 6380 -t set,get -n 5000 -c 10 -P 16 &&
+        echo '=== Large Data Test ===' &&
+        redis-benchmark -h mini-redis -p 6380 -t set,get -n 1000 -c 10 -d 1024 &&
+        echo '=== Pub/Sub Test ===' &&
+        timeout 10s redis-benchmark -h mini-redis -p 6380 -t publish -n 1000 -c 5 -d 256 || true &&
+        echo 'Benchmark tests completed!'
+      "
+
+  redis-cli:
+    image: redis:7-alpine
+    container_name: redis-cli-client
+    depends_on:
+      mini-redis:
+        condition: service_healthy
+    networks:
+      - mini-redis-network
+    profiles:
+      - cli
+    stdin_open: true
+    tty: true
+    command: redis-cli -h mini-redis -p 6380
+
+networks:
+  mini-redis-network:
+    driver: bridge
+
+volumes:
+  mini-redis-data:
+    driver: local

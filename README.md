@@ -6,7 +6,7 @@ A high-performance, Redis-compatible in-memory data store with real-time perform
 
 ### Core Functionality
 
-- **Redis-compatible commands**: GET, SET, DEL, EXPIRE, TTL, INCR, DECR
+- **Redis-compatible commands**: PING, GET, SET, DEL, EXPIRE
 - **Pub/Sub messaging**: SUBSCRIBE, UNSUBSCRIBE, PUBLISH with real-time updates
 - **In-memory storage**: Lightning-fast key-value operations with TTL support
 - **High-performance I/O**: Multiplexed socket handling for optimal throughput
@@ -37,23 +37,27 @@ A high-performance, Redis-compatible in-memory data store with real-time perform
 
 ```
 mini-redis/
-├── index.js                 # Main entry point with CLI
-├── main.js                  # Core server implementation
-├── package.json             # Project configuration
-├── README.md               # This file
-├── LICENSE                 # MIT license
-├── src/                    # Core functionality
-│   ├── store.js            # In-memory key-value store
-│   ├── pubsub.js           # Pub/sub messaging system
-│   ├── io_multiflexing.js  # High-performance I/O multiplexer
-│   ├── message_handler.js  # Redis protocol message handling
-│   └── performance_monitor.js # Real-time performance monitoring
-├── web/                    # Web interface
-│   └── index.html          # Single-page web application
-└── tests/                  # Test suite and utilities
-    ├── test_performance_integration.js # Integration tests
-    ├── tcp_client.js       # TCP client for testing
-    └── demo_improvements.js # Demo and benchmarking
+├── index.js                    # Main entry point with CLI
+├── package.json                # Project configuration
+├── README.md                   # This file
+├── main.js                     # Legacy server implementation (deprecated)
+└── src/                        # Core functionality
+    ├── core/                   # Core server components
+    │   ├── tcp_server.js       # Main TCP server implementation
+    │   ├── tcp_client.js       # TCP client connection handler
+    │   ├── store.js            # In-memory key-value store with TTL
+    │   ├── pubsub.js           # High-performance pub/sub messaging
+    │   ├── io_multiflexing.js  # Advanced I/O multiplexer
+    │   └── message_handler.js  # Message compression & chunking
+    ├── monitoring/             # Monitoring and web interface
+    │   ├── orchestrator.js     # Monitoring system orchestrator
+    │   ├── http_handler.js     # HTTP API request handler
+    │   ├── ws_handler.js       # WebSocket handler for real-time updates
+    │   └── performance_monitor.js # Real-time performance monitoring
+    ├── public/                 # Web interface assets
+    │   └── index.html          # Single-page web application
+    └── tests/                  # Test files
+        └── test_performance_integration.js # Performance integration tests
 ```
 
 ## 🏃‍♂️ Quick Start
@@ -65,18 +69,45 @@ mini-redis/
 git clone https://github.com/EricNguyen1206/mini-redis.git
 cd mini-redis
 
-# Start the server (default ports: TCP 6380, HTTP 8080)
+# Start the server with monitoring (default ports: TCP 6380, HTTP 8080)
+node index.js --monitor
+
+# Or start TCP server only (no web interface)
 node index.js
 
 # Or use npm scripts
-npm start
+npm start -- --monitor
+```
+
+### 🐳 Docker Quick Start
+
+For the easiest setup, use Docker:
+
+```bash
+# Build and start with monitoring
+./docker-run.sh start
+
+# Run benchmark tests
+./docker-run.sh benchmark
+
+# Connect with Redis CLI
+./docker-run.sh cli
+
+# View logs
+./docker-run.sh logs
+
+# Stop services
+./docker-run.sh stop
 ```
 
 ### Command Line Options
 
 ```bash
+# Start with monitoring enabled (web interface + performance monitoring)
+node index.js --monitor
+
 # Custom ports
-node index.js --port 6379 --http-port 3000
+node index.js --port 6379 --http-port 3000 --monitor
 
 # Show help
 node index.js --help
@@ -107,15 +138,16 @@ redis-cli -h localhost -p 6380
 ### Basic Commands
 
 ```redis
+# Connection test
+PING
+
 # String operations
 SET user:1 "John Doe"
 GET user:1
-INCR counter
-DECR counter
 
-# Expiration
-SET session:abc123 "user_data" EX 3600
-TTL session:abc123
+# Expiration (TTL in seconds)
+SET session:abc123 "user_data"
+EXPIRE session:abc123 3600
 
 # Deletion
 DEL user:1
@@ -139,10 +171,38 @@ PUBLISH sports "Game update: Score 2-1"
 
 ### Web Interface
 
-1. **Open browser**: Navigate to `http://localhost:8080`
-2. **Data tab**: View and manage key-value pairs
-3. **Pub/Sub tab**: Test messaging with interactive interface
-4. **Performance tab**: Monitor real-time metrics and charts
+Once the server is running with `--monitor` flag, open your browser to `http://localhost:8080` to access the web interface.
+
+The interface provides:
+
+- **Data & Commands Tab**:
+
+  - Browse all stored keys and values in real-time
+  - Execute Redis commands with a user-friendly interface
+  - Support for PING, GET, SET, DELETE, and SET with TTL operations
+  - Real-time data refresh and clear all functionality
+
+- **Pub/Sub Tab**:
+
+  - Monitor active channels and subscriber counts
+  - Test SUBSCRIBE, UNSUBSCRIBE, and PUBLISH commands
+  - Real-time message log with timestamps
+  - Interactive command interface
+
+- **Performance Tab**:
+
+  - Real-time performance charts using Chart.js
+  - Cache metrics: Requests/sec, P99 latency, hit rate
+  - Pub/Sub metrics: Messages published/consumed per second, latency
+  - System metrics: Active connections, memory usage, uptime
+
+- **Real-time Features**:
+  - WebSocket integration for live updates
+  - Toast notification system for user feedback
+  - Auto-refresh fallback when WebSocket is unavailable
+  - Responsive design for mobile and desktop
+
+## 📚 Redis Command Reference
 
 #### `GET key`
 
@@ -240,27 +300,157 @@ message <channel> <message_content>
 < message news Breaking: Node.js is awesome!
 ```
 
-## 🚀 Usage Instructions
+## 🌐 HTTP API & WebSocket
+
+### API Endpoints
+
+The server exposes several HTTP endpoints for programmatic access when running with `--monitor`:
+
+- `GET /api/data` - Retrieve all stored key-value pairs with TTL information
+- `POST /api/command` - Execute Redis commands via HTTP JSON payload
+- `GET /api/pubsub` - Get active pub/sub channels and subscriber counts
+- `GET /api/performance` - Get real-time performance metrics
+
+#### Example API Usage
+
+```bash
+# Get all data
+curl http://localhost:8080/api/data
+
+# Execute a command
+curl -X POST http://localhost:8080/api/command \
+  -H "Content-Type: application/json" \
+  -d '{"command": "SET mykey myvalue"}'
+
+# Get performance metrics
+curl http://localhost:8080/api/performance
+```
+
+### WebSocket Support
+
+Connect to the WebSocket endpoint for real-time updates:
+
+```javascript
+const ws = new WebSocket("ws://localhost:8080");
+ws.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  if (data.type === "performance") {
+    console.log("Performance update:", data.data);
+  } else if (data.type === "data_update") {
+    console.log("Data update:", data.data);
+  }
+};
+```
+
+## � Docker Deployment
+
+### Prerequisites
+
+- Docker and Docker Compose installed
+- Ports 6380 and 8080 available on your host
+
+### Docker Files
+
+The project includes:
+
+- `Dockerfile` - Multi-stage build with Node.js Alpine
+- `docker-compose.yml` - Complete orchestration with health checks
+- `docker-run.sh` - Management script for easy operations
+- `.dockerignore` - Optimized build context
+
+### Quick Commands
+
+```bash
+# Build and start the server
+./docker-run.sh start
+
+# Run comprehensive benchmark tests
+./docker-run.sh benchmark
+
+# Interactive Redis CLI session
+./docker-run.sh cli
+
+# View real-time logs
+./docker-run.sh logs
+
+# Check service status and health
+./docker-run.sh status
+
+# Stop all services
+./docker-run.sh stop
+
+# Clean up resources
+./docker-run.sh clean
+```
+
+### Manual Docker Commands
+
+If you prefer manual control:
+
+```bash
+# Build the image
+docker compose build
+
+# Start Mini-Redis with monitoring
+docker compose up -d mini-redis
+
+# Run benchmark tests
+docker compose --profile benchmark up redis-benchmark
+
+# Connect with Redis CLI
+docker compose --profile cli run --rm redis-cli
+
+# View logs
+docker compose logs -f mini-redis
+
+# Stop everything
+docker compose down
+```
+
+### Benchmark Results
+
+The included redis-benchmark tests will run:
+
+1. **Basic Performance**: 10,000 SET/GET operations with 50 concurrent clients
+2. **Pipeline Test**: 5,000 operations with 16-command pipelines
+3. **Large Data**: 1,000 operations with 1KB payloads
+4. **Pub/Sub Test**: 1,000 PUBLISH operations
+
+Expected performance on modern hardware:
+
+- **Throughput**: 5,000-15,000 ops/sec depending on operation type
+- **Latency**: Sub-millisecond for simple operations
+- **Memory**: ~10-50MB depending on data size
+
+### Container Features
+
+- **Health Checks**: Automatic PING-based health monitoring
+- **Security**: Non-root user execution
+- **Networking**: Isolated Docker network
+- **Profiles**: Separate profiles for benchmark and CLI tools
+- **Restart Policy**: Automatic restart unless stopped
+
+## �🚀 Usage Instructions
 
 ### Starting the Server
 
-1. **Default Configuration** (Port 6380):
+1. **With monitoring** (recommended):
 
    ```bash
-   node main.js
+   node index.js --monitor
    ```
 
-2. **Custom Port** using environment variable:
+2. **TCP server only**:
 
    ```bash
-   PORT=7000 node main.js
+   node index.js
    ```
 
-3. **Built-in Demo Mode**:
+3. **Custom ports**:
+
    ```bash
-   node main.js --demo
+   node index.js --port 6379 --http-port 3000 --monitor
    ```
-   This starts the server and runs an automated demo showcasing key features.
 
 ### Connecting Clients
 
@@ -618,15 +808,19 @@ The enhanced I/O multiplexing architecture provides significant improvements ove
 - **Authentication**: No authentication or authorization mechanisms
 - **Protocol**: Simplified protocol, not fully Redis-compatible
 - **Data Types**: String values only (no lists, sets, hashes, etc.)
+- **Commands**: Limited command set (PING, GET, SET, DEL, EXPIRE, SUBSCRIBE, UNSUBSCRIBE, PUBLISH)
+- **Dependencies**: Zero external dependencies (Node.js built-in modules only)
 
 ## 🧪 Testing
 
+### Manual Testing
+
 To test the server functionality:
 
-1. **Start the server**:
+1. **Start the server with monitoring**:
 
    ```bash
-   node main.js
+   node index.js --monitor
    ```
 
 2. **Run basic connectivity test**:
@@ -652,28 +846,34 @@ To test the server functionality:
    echo "PUBLISH test_channel 'Hello World'" | nc 127.0.0.1 6380
    ```
 
-## 🧪 Performance Testing
+5. **Test web interface**:
+   - Open `http://localhost:8080` in your browser
+   - Try the interactive command interface
+   - Monitor real-time performance metrics
 
-The enhanced I/O multiplexing implementation includes comprehensive performance testing tools:
+### Automated Testing
 
-### Running Performance Tests
+Run the performance integration tests:
 
 ```bash
-# Start the server
-node main.js
+# Start the server with monitoring
+node index.js --monitor
 
 # In another terminal, run performance tests
-node test_performance_integration.js
+npm test
 ```
 
-### Running the Demo
+### Available NPM Scripts
 
 ```bash
-# Start the server
-node main.js
+# Start the server (TCP only)
+npm start
 
-# In another terminal, run the demo
-node demo_improvements.js
+# Start with monitoring (recommended)
+npm start -- --monitor
+
+# Run performance integration tests
+npm test
 ```
 
 ### Expected Performance Improvements
@@ -694,6 +894,51 @@ Typical performance on modern hardware:
 - **Many Subscribers**: 5,000+ messages/second with 100 subscribers
 - **Large Messages**: 1,000+ messages/second for 64KB payloads
 - **Mixed Workload**: 8,000+ messages/second with varied message sizes
+
+## ⚡ HTTP API Benchmark Results
+
+The included benchmark script demonstrates excellent performance via HTTP API:
+
+```bash
+🚀 Mini-Redis Benchmark Test
+==============================
+✅ Mini-Redis server is running
+
+📝 Testing SET operations...
+✅ 1000 SET operations completed in 10.97s (91.19 ops/sec)
+📖 Testing GET operations...
+✅ 1000 GET operations completed in 10.91s (91.64 ops/sec)
+🔄 Testing mixed operations (SET/GET/DEL)...
+✅ 900 mixed operations completed in 9.77s (92.16 ops/sec)
+
+📊 Performance Stats:
+- P99 Latency: 3.98ms
+- Memory Usage: 11.47MB
+- Total Requests: 3007
+```
+
+Run benchmarks with: `./benchmark.sh`
+
+## 🐳 Docker Configuration
+
+Complete Docker setup with health checks and monitoring:
+
+```bash
+# Start all services
+./docker-run.sh start
+
+# View real-time logs
+./docker-run.sh logs
+
+# Connect with Redis CLI
+./docker-run.sh cli
+
+# Run benchmarks
+./docker-run.sh benchmark
+
+# Clean up
+./docker-run.sh clean
+```
 
 ## 📝 License
 
