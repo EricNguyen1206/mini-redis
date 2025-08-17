@@ -1,0 +1,40 @@
+{
+  "name": "mini-redis-benchmark",
+  "version": "1.0.0",
+  "description": "Comprehensive performance testing and benchmarking tool for Mini-Redis with multiple test scenarios",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "basic": "node index.js basic",
+    "stress": "node index.js stress",
+    "pubsub": "node index.js pubsub",
+    "all": "node index.js all",
+    "test": "node index.js basic"
+  },
+  "keywords": [
+    "redis",
+    "benchmark",
+    "performance",
+    "testing",
+    "stress-test",
+    "pubsub",
+    "throughput",
+    "latency",
+    "microservice"
+  ],
+  "author": "EricNguyen1206",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EricNguyen1206/mini-redis",
+    "directory": "services/mini-redis-benchmark"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "bin": {
+    "mini-redis-benchmark": "./index.js"
+  }
+}

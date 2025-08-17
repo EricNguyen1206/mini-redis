@@ -1,0 +1,37 @@
+{
+  "name": "mini-redis-insight",
+  "version": "1.0.0",
+  "description": "Web-based monitoring and management interface for Mini-Redis with real-time performance insights",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "NODE_ENV=development node index.js",
+    "prod": "NODE_ENV=production node index.js"
+  },
+  "keywords": [
+    "redis",
+    "monitoring",
+    "dashboard",
+    "web-interface",
+    "performance",
+    "real-time",
+    "websocket",
+    "charts",
+    "microservice"
+  ],
+  "author": "EricNguyen1206",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EricNguyen1206/mini-redis",
+    "directory": "services/mini-redis-insight"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "bin": {
+    "mini-redis-insight": "./index.js"
+  }
+}

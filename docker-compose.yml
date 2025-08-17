@@ -1,12 +1,22 @@
+# Mini-Redis Microservices Architecture
+# =====================================
+# This docker-compose file orchestrates the three Mini-Redis microservices:
+# 1. mini-redis-core: High-performance Redis-compatible server
+# 2. mini-redis-insight: Web UI and monitoring dashboard
+# 3. mini-redis-benchmark: Performance testing and benchmarking tools
+
 services:
-  mini-redis:
-    build: .
-    container_name: mini-redis-server
+  # Core Redis Service - High-performance Redis-compatible server
+  mini-redis-core:
+    build:
+      context: ./services/mini-redis-core
+      dockerfile: Dockerfile
+    container_name: mini-redis-core
     ports:
       - "6380:6380"  # Redis protocol port
-      - "8080:8080"  # Web interface port
     environment:
       - NODE_ENV=production
+      - REDIS_PORT=6380
     networks:
       - mini-redis-network
     restart: unless-stopped
@@ -15,39 +25,110 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
+      start_period: 10s
 
-  redis-benchmark:
-    image: redis:7-alpine
-    container_name: redis-benchmark-client
-    depends_on:
-      mini-redis:
-        condition: service_healthy
+  # Insight Service - Web UI and monitoring dashboard
+  mini-redis-insight:
+    build:
+      context: ./services/mini-redis-insight
+      dockerfile: Dockerfile
+    container_name: mini-redis-insight
+    ports:
+      - "8080:8080"  # Web interface port
+    environment:
+      - NODE_ENV=production
+      - HTTP_PORT=8080
+      - REDIS_HOST=mini-redis-core
+      - REDIS_PORT=6380
     networks:
       - mini-redis-network
+    depends_on:
+      mini-redis-core:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "const http = require('http'); const req = http.request('http://localhost:8080/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', () => process.exit(1)); req.end();"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # Benchmark Service - Performance testing tools
+  mini-redis-benchmark:
+    build:
+      context: ./services/mini-redis-benchmark
+      dockerfile: Dockerfile
+    container_name: mini-redis-benchmark
+    environment:
+      - REDIS_HOST=mini-redis-core
+      - REDIS_PORT=6380
+    networks:
+      - mini-redis-network
+    depends_on:
+      mini-redis-core:
+        condition: service_healthy
     profiles:
       - benchmark
-    command: >
-      sh -c "
-        echo 'Waiting for Mini-Redis to be ready...' &&
-        sleep 5 &&
-        echo 'Starting Redis benchmark tests...' &&
-        echo '=== Basic Performance Test ===' &&
-        redis-benchmark -h mini-redis -p 6380 -t set,get -n 10000 -c 50 -d 64 &&
-        echo '=== Pipeline Test ===' &&
-        redis-benchmark -h mini-redis -p 6380 -t set,get -n 5000 -c 10 -P 16 &&
-        echo '=== Large Data Test ===' &&
-        redis-benchmark -h mini-redis -p 6380 -t set,get -n 1000 -c 10 -d 1024 &&
-        echo '=== Pub/Sub Test ===' &&
-        timeout 10s redis-benchmark -h mini-redis -p 6380 -t publish -n 1000 -c 5 -d 256 || true &&
-        echo 'Benchmark tests completed!'
-      "
+    command: ["node", "index.js", "basic"]
 
+  # Additional benchmark scenarios
+  mini-redis-benchmark-stress:
+    build:
+      context: ./services/mini-redis-benchmark
+      dockerfile: Dockerfile
+    container_name: mini-redis-benchmark-stress
+    environment:
+      - REDIS_HOST=mini-redis-core
+      - REDIS_PORT=6380
+    networks:
+      - mini-redis-network
+    depends_on:
+      mini-redis-core:
+        condition: service_healthy
+    profiles:
+      - stress
+    command: ["node", "index.js", "stress", "--pool-size", "20"]
+
+  mini-redis-benchmark-pubsub:
+    build:
+      context: ./services/mini-redis-benchmark
+      dockerfile: Dockerfile
+    container_name: mini-redis-benchmark-pubsub
+    environment:
+      - REDIS_HOST=mini-redis-core
+      - REDIS_PORT=6380
+    networks:
+      - mini-redis-network
+    depends_on:
+      mini-redis-core:
+        condition: service_healthy
+    profiles:
+      - pubsub
+    command: ["node", "index.js", "pubsub", "--pool-size", "15"]
+
+  mini-redis-benchmark-all:
+    build:
+      context: ./services/mini-redis-benchmark
+      dockerfile: Dockerfile
+    container_name: mini-redis-benchmark-all
+    environment:
+      - REDIS_HOST=mini-redis-core
+      - REDIS_PORT=6380
+    networks:
+      - mini-redis-network
+    depends_on:
+      mini-redis-core:
+        condition: service_healthy
+    profiles:
+      - benchmark-all
+    command: ["node", "index.js", "all", "--pool-size", "25"]
+
+  # Redis CLI for manual testing
   redis-cli:
     image: redis:7-alpine
     container_name: redis-cli-client
     depends_on:
-      mini-redis:
+      mini-redis-core:
         condition: service_healthy
     networks:
       - mini-redis-network
@@ -55,7 +136,7 @@ services:
       - cli
     stdin_open: true
     tty: true
-    command: redis-cli -h mini-redis -p 6380
+    command: redis-cli -h mini-redis-core -p 6380
 
 networks:
   mini-redis-network:

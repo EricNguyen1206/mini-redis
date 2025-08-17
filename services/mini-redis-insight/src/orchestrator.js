@@ -3,24 +3,31 @@ const path = require("path");
 const PerformanceMonitor = require("./performance_monitor");
 const HttpRequestHandler = require("./http_handler");
 const WebSocketHandler = require("./ws_handler");
-/** @typedef {import('../core/tcp_server')} TCPServer */
+const RedisClient = require("./redis_client");
 
 class Orchestrator {
   /**
    *
    * @param {number} httpPort
-   * @param {TCPServer} tcpServer
+   * @param {object} options - Configuration options
    */
-  constructor(httpPort, tcpServer) {
-    this.tcpServer = tcpServer;
+  constructor(httpPort, options = {}) {
     this.httpPort = httpPort;
+    this.redisHost = options.redisHost || process.env.REDIS_HOST || "mini-redis-core";
+    this.redisPort = options.redisPort || process.env.REDIS_PORT || 6380;
+
+    // Initialize Redis client
+    this.redisClient = new RedisClient({
+      host: this.redisHost,
+      port: this.redisPort,
+    });
 
     this.ws = new WebSocketHandler(this);
     // Initialize performance monitoring
-    this.performanceMonitor = new PerformanceMonitor(this.tcpServer);
+    this.performanceMonitor = new PerformanceMonitor(this.redisClient);
     // HTTP Server for web interface
     this.httpRequestHandler = new HttpRequestHandler({
-      core: this.tcpServer,
+      redisClient: this.redisClient,
       notifier: this.notifyWebClients.bind(this),
       performanceMonitor: this.performanceMonitor,
       staticDir: path.resolve(__dirname, "../public"),
@@ -45,20 +52,42 @@ class Orchestrator {
     });
   }
 
-  listen() {
-    return new Promise((resolve) => {
+  async listen() {
+    try {
+      // Connect to Redis core service first
+      console.log(`🔌 Connecting to Redis core at ${this.redisHost}:${this.redisPort}...`);
+      await this.redisClient.connect();
+      console.log(`✅ Connected to Redis core service`);
+
       // Start HTTP server
-      this.httpServer.listen(this.httpPort, () => {
-        console.log(`mini-redis HTTP server listening on 127.0.0.1:${this.httpPort}`);
-        console.log(`Web interface available at http://127.0.0.1:${this.httpPort}`);
-        resolve();
+      return new Promise((resolve) => {
+        this.httpServer.listen(this.httpPort, () => {
+          console.log(`🌐 Mini-Redis Insight HTTP server listening on 127.0.0.1:${this.httpPort}`);
+          console.log(`📊 Web interface available at http://127.0.0.1:${this.httpPort}`);
+          resolve();
+        });
       });
-    });
+    } catch (error) {
+      console.error(`❌ Failed to connect to Redis core: ${error.message}`);
+      console.log(`🔄 Starting HTTP server anyway (will retry Redis connection automatically)`);
+
+      // Start HTTP server even if Redis connection fails
+      return new Promise((resolve) => {
+        this.httpServer.listen(this.httpPort, () => {
+          console.log(`🌐 Mini-Redis Insight HTTP server listening on 127.0.0.1:${this.httpPort}`);
+          console.log(`⚠️  Redis core not available - some features may be limited`);
+          resolve();
+        });
+      });
+    }
   }
 
   async close() {
     try {
       this.performanceMonitor.stop();
+    } catch {}
+    try {
+      this.redisClient.disconnect();
     } catch {}
     try {
       for (const sock of this.ws?.webClients || []) {
