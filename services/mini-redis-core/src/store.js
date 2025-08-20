@@ -15,11 +15,14 @@ class MiniRedisStore {
   }
 
   del(keys) {
-    const list = Array.isArray(keys)
-      ? keys
-      : typeof keys === "string" || keys == null || typeof keys[Symbol.iterator] !== "function"
-      ? [keys]
-      : Array.from(keys);
+    let list;
+    if (Array.isArray(keys)) {
+      list = keys;
+    } else if (typeof keys === "string" || keys == null || typeof keys[Symbol.iterator] !== "function") {
+      list = [keys];
+    } else {
+      list = Array.from(keys);
+    }
     let removed = 0;
     for (const key of list) {
       if (this.store.delete(key)) {

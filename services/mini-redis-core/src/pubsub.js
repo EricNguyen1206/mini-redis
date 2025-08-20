@@ -22,15 +22,15 @@ class PubSub {
     this.bufferFlushTimer = setInterval(() => this._flushMessageBuffers(), this.options.bufferFlushInterval);
   }
 
-  subscribe(client, channel, priority = "normal") {
+  subscribe(client, channel, priority = "medium") {
     // Initialize channel if it doesn't exist
     if (!this.channels.has(channel)) {
       this.channels.set(channel, new Set());
       this.subscriberGroups.set(
         channel,
         new Map([
-          ["priority", new Set()],
-          ["normal", new Set()],
+          ["high", new Set()],
+          ["medium", new Set()],
           ["low", new Set()],
         ])
       );
@@ -51,7 +51,7 @@ class PubSub {
     // Add client to appropriate priority group if grouping is enabled
     if (this.options.enableSubscriberGrouping) {
       const groups = this.subscriberGroups.get(channel);
-      const groupKey = groups.has(priority) ? priority : "normal";
+      const groupKey = groups.has(priority) ? priority : "medium";
       groups.get(groupKey).add(client);
     }
 
@@ -155,7 +155,7 @@ class PubSub {
   // Direct message delivery (synchronous)
   _publishDirect(channel, formattedMessage, channelSet, options) {
     let delivered = 0;
-    const priority = options.priority || "normal";
+    const priority = options.priority || "medium";
 
     for (const client of channelSet) {
       try {
@@ -180,7 +180,7 @@ class PubSub {
 
   // I/O multiplexer-based delivery (asynchronous, high-performance)
   _publishWithMultiplexer(channel, formattedMessage, channelSet, options) {
-    const priority = options.priority || "normal";
+    const priority = options.priority || "medium";
     const sockets = [];
 
     // Extract sockets from clients
@@ -244,13 +244,13 @@ class PubSub {
     let totalDelivered = 0;
 
     // Group messages by priority for efficient delivery
-    const priorityGroups = { priority: [], normal: [], low: [] };
+    const priorityGroups = { high: [], medium: [], low: [] };
     for (const bufferedMsg of buffer) {
       const p =
         bufferedMsg?.options?.priority &&
         Object.prototype.hasOwnProperty.call(priorityGroups, bufferedMsg.options.priority)
           ? bufferedMsg.options.priority
-          : "normal";
+          : "medium";
       priorityGroups[p].push(bufferedMsg.message);
     }
 
