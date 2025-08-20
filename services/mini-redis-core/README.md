@@ -5,6 +5,7 @@ A high-performance, lightweight Redis-compatible server focused exclusively on c
 ## ⚡ Performance Focus
 
 This core service is designed for:
+
 - **Maximum Throughput**: Optimized I/O multiplexing for high-frequency operations
 - **Minimal Latency**: No monitoring or web interface overhead
 - **Low Memory Footprint**: Efficient data structures and memory management
@@ -12,20 +13,35 @@ This core service is designed for:
 
 ## 🔌 Supported Commands
 
-### Basic Operations
+### Connection & Authentication
+
 - `PING` - Test connection
+- `AUTH [username] password` - Authenticate (always succeeds - no auth required)
+- `SELECT database` - Select database (only database 0 supported)
+- `INFO [section]` - Get server information
+- `CLIENT SETNAME name` - Set client connection name
+- `CLIENT GETNAME` - Get client connection name
+- `CLIENT LIST` - List client connections
+
+### Basic Operations
+
 - `SET key value` - Store a key-value pair
 - `GET key` - Retrieve a value by key
 - `DEL key [key ...]` - Delete one or more keys
 - `EXISTS key` - Check if key exists
 - `KEYS pattern` - Find keys matching pattern
+- `SCAN cursor [MATCH pattern] [COUNT count]` - Iterate over keys with cursor-based pagination
+- `TYPE key` - Get the type of a key (always returns "string" or "none")
+- `DBSIZE` - Get the number of keys in the database
 
 ### TTL Operations
+
 - `EXPIRE key seconds` - Set key expiration
 - `TTL key` - Get remaining time to live
 - `PERSIST key` - Remove expiration
 
 ### Pub/Sub Operations
+
 - `SUBSCRIBE channel [channel ...]` - Subscribe to channels
 - `UNSUBSCRIBE [channel ...]` - Unsubscribe from channels
 - `PUBLISH channel message` - Publish message to channel
@@ -76,6 +92,30 @@ telnet localhost 6380
 const redis = require('redis');
 const client = redis.createClient({ port: 6380 });
 ```
+
+### RedisInsight Compatibility
+
+Mini-Redis Core is fully compatible with RedisInsight for monitoring and management:
+
+```bash
+# Connection string for RedisInsight
+redis://mini-redis-core:6380
+
+# Or when connecting from host machine
+redis://localhost:6380
+```
+
+**Supported RedisInsight Features:**
+
+- ✅ Database connection and authentication
+- ✅ Server information display (INFO command)
+- ✅ Key-value operations (GET, SET, DEL)
+- ✅ Key browsing and pattern matching
+- ✅ TTL management
+- ✅ Pub/Sub monitoring
+- ✅ Real-time command monitoring
+
+**Note**: Mini-Redis Core doesn't require authentication, but accepts any AUTH command for client compatibility.
 
 ## 📊 Performance Characteristics
 
@@ -149,6 +189,7 @@ This service is designed to work as part of the Mini-Redis microservices archite
 ## 📈 Monitoring Integration
 
 While this core service doesn't include monitoring, it exposes metrics via:
+
 - Connection count tracking
 - Command execution statistics
 - Memory usage information
