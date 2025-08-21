@@ -1,130 +1,152 @@
-# 🎯 Mini-Redis Core Service
+# Mini-Redis Core Service
 
 A high-performance, lightweight Redis-compatible server focused exclusively on core functionality. This service is optimized for maximum throughput and minimal latency without any web interface or monitoring overhead.
 
-## ⚡ Performance Focus
+## Supported Commands
 
-This core service is designed for:
+### Primary Commands (Core Functionality)
 
-- **Maximum Throughput**: Optimized I/O multiplexing for high-frequency operations
-- **Minimal Latency**: No monitoring or web interface overhead
-- **Low Memory Footprint**: Efficient data structures and memory management
-- **High Concurrency**: Handles thousands of concurrent connections
+#### SET
+**Syntax:** `SET key value`
 
-## 🔌 Supported Commands
+**Description:** Store a key-value pair in the database. This is the fundamental write operation for Mini-Redis.
 
-### Connection & Authentication
+**Examples:**
+```redis
+SET user:1 "John Doe"
+# Response: OK
 
-- `PING` - Test connection
-- `AUTH [username] password` - Authenticate (always succeeds - no auth required)
+SET counter 42
+# Response: OK
+
+SET session:abc123 "user_data"
+# Response: OK
+```
+
+**Return Values:**
+- Simple string `OK` on successful storage
+
+#### GET
+**Syntax:** `GET key`
+
+**Description:** Retrieve the value of a key from the database. This is the fundamental read operation for Mini-Redis.
+
+**Examples:**
+```redis
+GET user:1
+# Response: "John Doe"
+
+GET counter
+# Response: "42"
+
+GET nonexistent
+# Response: (nil)
+```
+
+**Return Values:**
+- Bulk string with the value if key exists
+- Null bulk string `(nil)` if key doesn't exist
+
+#### DEL
+**Syntax:** `DEL key [key ...]`
+
+**Description:** Delete one or more keys from the database. Returns the number of keys that were actually deleted.
+
+**Examples:**
+```redis
+DEL user:1
+# Response: (integer) 1
+
+DEL key1 key2 key3
+# Response: (integer) 2  (if only 2 keys existed)
+
+DEL nonexistent
+# Response: (integer) 0
+```
+
+**Return Values:**
+- Integer representing the number of keys that were successfully deleted
+
+### Pub/Sub Commands (Real-time Messaging)
+
+#### SUBSCRIBE
+**Syntax:** `SUBSCRIBE channel [channel ...]`
+
+**Description:** Subscribe to one or more channels for real-time messaging. The client will receive all messages published to subscribed channels.
+
+**Examples:**
+```redis
+SUBSCRIBE news
+# Response: ["subscribe", "news", 1]
+
+SUBSCRIBE news sports weather
+# Response:
+# ["subscribe", "news", 1]
+# ["subscribe", "sports", 2]
+# ["subscribe", "weather", 3]
+```
+
+**Return Values:**
+- Array for each channel: ["subscribe", channel_name, total_subscription_count]
+
+#### UNSUBSCRIBE
+**Syntax:** `UNSUBSCRIBE [channel ...]`
+
+**Description:** Unsubscribe from specified channels. If no channels are specified, unsubscribes from all channels.
+
+**Examples:**
+```redis
+UNSUBSCRIBE news
+# Response: ["unsubscribe", "news", 2]
+
+UNSUBSCRIBE
+# Response: Unsubscribe confirmations for all subscribed channels
+```
+
+**Return Values:**
+- Array for each channel: ["unsubscribe", channel_name, remaining_subscription_count]
+
+#### PUBLISH
+**Syntax:** `PUBLISH channel message`
+
+**Description:** Publish a message to a channel. All clients subscribed to the channel will receive the message immediately.
+
+**Examples:**
+```redis
+PUBLISH news "Breaking: New Redis server released!"
+# Response: (integer) 3  (3 subscribers received the message)
+
+PUBLISH empty_channel "Hello"
+# Response: (integer) 0  (no subscribers)
+```
+
+**Return Values:**
+- Integer representing the number of subscribers that received the message
+
+### Other Commands (Utility & Management)
+
+#### Connection & Authentication
+- `PING [message]` - Test connection, returns PONG or echoes message
+- `AUTH [username] password` - Authenticate (always succeeds for compatibility)
 - `SELECT database` - Select database (only database 0 supported)
-- `INFO [section]` - Get server information
+- `INFO [section]` - Get server information and statistics
 - `CLIENT SETNAME name` - Set client connection name
 - `CLIENT GETNAME` - Get client connection name
 - `CLIENT LIST` - List client connections
 
-### Basic Operations
+#### Key Management
+- `EXISTS key [key ...]` - Check if keys exist, returns count
+- `KEYS pattern` - Find keys matching glob pattern
+- `SCAN cursor [MATCH pattern] [COUNT count]` - Iterate keys with pagination
+- `TYPE key` - Get key data type (always "string" or "none")
+- `DBSIZE` - Get total number of keys in database
 
-- `SET key value` - Store a key-value pair
-- `GET key` - Retrieve a value by key
-- `DEL key [key ...]` - Delete one or more keys
-- `EXISTS key` - Check if key exists
-- `KEYS pattern` - Find keys matching pattern
-- `SCAN cursor [MATCH pattern] [COUNT count]` - Iterate over keys with cursor-based pagination
-- `TYPE key` - Get the type of a key (always returns "string" or "none")
-- `DBSIZE` - Get the number of keys in the database
+#### TTL Operations
+- `EXPIRE key seconds` - Set key expiration time
+- `TTL key` - Get remaining time to live (-1: no expiration, -2: key not found)
 
-### TTL Operations
 
-- `EXPIRE key seconds` - Set key expiration
-- `TTL key` - Get remaining time to live
-- `PERSIST key` - Remove expiration
-
-### Pub/Sub Operations
-
-- `SUBSCRIBE channel [channel ...]` - Subscribe to channels
-- `UNSUBSCRIBE [channel ...]` - Unsubscribe from channels
-- `PUBLISH channel message` - Publish message to channel
-
-## 🚀 Quick Start
-
-### Local Development
-
-```bash
-# Install dependencies (if any)
-npm install
-
-# Start the core service
-npm start
-
-# Start on custom port
-node index.js --port 6379
-
-# Using environment variable
-REDIS_PORT=6379 npm start
-```
-
-### Docker
-
-```bash
-# Build the image
-docker build -t mini-redis-core .
-
-# Run the container
-docker run -p 6380:6380 mini-redis-core
-
-# Run with custom port
-docker run -p 6379:6379 -e REDIS_PORT=6379 mini-redis-core
-```
-
-## 🔗 Client Connections
-
-Connect using any Redis-compatible client:
-
-```bash
-# Redis CLI
-redis-cli -p 6380
-
-# Telnet
-telnet localhost 6380
-
-# Node.js
-const redis = require('redis');
-const client = redis.createClient({ port: 6380 });
-```
-
-### RedisInsight Compatibility
-
-Mini-Redis Core is fully compatible with RedisInsight for monitoring and management:
-
-```bash
-# Connection string for RedisInsight
-redis://mini-redis-core:6380
-
-# Or when connecting from host machine
-redis://localhost:6380
-```
-
-**Supported RedisInsight Features:**
-
-- ✅ Database connection and authentication
-- ✅ Server information display (INFO command)
-- ✅ Key-value operations (GET, SET, DEL)
-- ✅ Key browsing and pattern matching
-- ✅ TTL management
-- ✅ Pub/Sub monitoring
-- ✅ Real-time command monitoring
-
-**Note**: Mini-Redis Core doesn't require authentication, but accepts any AUTH command for client compatibility.
-
-## 📊 Performance Characteristics
-
-- **Throughput**: 10,000+ operations/second (single-threaded)
-- **Latency**: Sub-millisecond response times for simple operations
-- **Memory**: ~5-10MB base memory usage
-- **Connections**: Supports 1000+ concurrent connections
-
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables
 
@@ -142,66 +164,18 @@ Options:
   --version           Show version information
 ```
 
-## 🏗️ Architecture
-
-The core service consists of:
-
-- **TCP Server** (`tcp_server.js`) - Main Redis protocol handler
-- **Storage Engine** (`store.js`) - In-memory key-value store with TTL
-- **Pub/Sub Engine** (`pubsub.js`) - Message routing and subscriptions
-- **I/O Multiplexer** (`io_multiflexing.js`) - High-performance connection handling
-- **Message Handler** (`message_handler.js`) - Command parsing and execution
-- **TCP Client** (`tcp_client.js`) - Client connection management
-
-## 🔧 Development
-
-### Project Structure
-
-```
-mini-redis-core/
-├── src/
-│   ├── tcp_server.js      # Main TCP server
-│   ├── store.js           # Key-value storage
-│   ├── pubsub.js          # Pub/Sub messaging
-│   ├── io_multiflexing.js # I/O optimization
-│   ├── message_handler.js # Command processing
-│   └── tcp_client.js      # Client management
-├── index.js               # Service entry point
-├── package.json           # Dependencies
-├── Dockerfile            # Container definition
-└── README.md             # This file
-```
-
-### Adding New Commands
-
-1. Add command parsing in `message_handler.js`
-2. Implement command logic in `tcp_server.js`
-3. Update this documentation
-
 ## 🐳 Docker Integration
 
-This service is designed to work as part of the Mini-Redis microservices architecture:
+This service is containerized and can be deployed standalone or as part of a larger architecture.
 
-- **mini-redis-core** (this service) - Core Redis functionality
-- **mini-redis-insight** - Web UI and monitoring
-- **mini-redis-benchmark** - Performance testing tools
+## 📈 Performance Monitoring
 
-## 📈 Monitoring Integration
+The core service includes built-in performance monitoring features:
 
-While this core service doesn't include monitoring, it exposes metrics via:
-
-- Connection count tracking
-- Command execution statistics
-- Memory usage information
-
-These can be accessed by the `mini-redis-insight` service for visualization.
-
-## 🔒 Security
-
-- Runs as non-root user in Docker
-- No external dependencies
-- Minimal attack surface
-- Input validation and sanitization
+- I/O multiplexing with 3-priority message queues (high, medium, low)
+- Connection health tracking and metrics
+- Automatic message batching and backpressure handling
+- Performance statistics for queue management
 
 ## 📄 License
 
