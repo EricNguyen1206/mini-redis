@@ -1,18 +1,4 @@
-# Mini-Redis Microservices Architecture
-# =====================================
-# This docker-compose file orchestrates the Mini-Redis microservices with maximum flexibility:
-#
-# STANDALONE DEPLOYMENT:
-# - mini-redis-core: Fully self-contained Redis-compatible server
-#
-# MONITORED DEPLOYMENT:
-# - mini-redis-core + mini-redis-insight: Redis server with web monitoring
-#
-# TESTING DEPLOYMENT:
-# - Add mini-redis-benchmark: Performance testing tools
-#
-# Each service can run independently and be added/removed without affecting others.
-
+# Mini-Redis Microservices
 services:
   # ============================================================================
   # CORE SERVICE - Fully Standalone Redis-Compatible Server
@@ -41,39 +27,6 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # INSIGHT SERVICE - Optional Plug-and-Play Web Monitoring
-  # ============================================================================
-  # This service is completely optional and can be added to any running core service.
-  # Provides web dashboard, real-time monitoring, and interactive command execution.
-  # Gracefully handles cases where core service is unavailable.
-
-  # COMMENTED OUT - Replaced with official RedisInsight
-  # mini-redis-insight:
-  #   build:
-  #     context: ./services/mini-redis-insight
-  #     dockerfile: Dockerfile
-  #   container_name: mini-redis-insight
-  #   ports:
-  #     - "8080:8080"  # Web interface port
-  #   environment:
-  #     - NODE_ENV=production
-  #     - HTTP_PORT=8080
-  #     - REDIS_HOST=mini-redis-core
-  #     - REDIS_PORT=6380
-  #   networks:
-  #     - mini-redis-network
-  #   # NO depends_on - can start independently and connect when core is available
-  #   restart: unless-stopped
-  #   profiles:
-  #     - insight  # Optional service - only starts when explicitly requested
-  #   healthcheck:
-  #     test: ["CMD", "node", "-e", "const http = require('http'); const req = http.request('http://localhost:8080/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', () => process.exit(1)); req.end();"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
-  #     start_period: 15s
-
-  # ============================================================================
   # OFFICIAL REDISINSIGHT SERVICE - Redis Labs Web Monitoring Tool
   # ============================================================================
   # Official Redis monitoring and management tool with web interface
@@ -91,70 +44,6 @@ services:
     restart: unless-stopped
     profiles:
       - insight  # Optional service - only starts when explicitly requested
-
-  # ============================================================================
-  # BENCHMARK SERVICES - Optional Performance Testing Tools
-  # ============================================================================
-  # These services are completely optional and can test any running core service.
-  # They will wait and retry if the core service is not immediately available.
-
-  # COMMENTED OUT - Replaced with official memtier_benchmark
-  # mini-redis-benchmark:
-  #   build:
-  #     context: ./services/mini-redis-benchmark
-  #     dockerfile: Dockerfile
-  #   container_name: mini-redis-benchmark
-  #   environment:
-  #     - REDIS_HOST=mini-redis-core
-  #     - REDIS_PORT=6380
-  #   networks:
-  #     - mini-redis-network
-  #   # NO depends_on - benchmarks will handle connection retries internally
-  #   profiles:
-  #     - benchmark
-  #   command: ["node", "index.js", "basic"]
-
-  # mini-redis-benchmark-stress:
-  #   build:
-  #     context: ./services/mini-redis-benchmark
-  #     dockerfile: Dockerfile
-  #   container_name: mini-redis-benchmark-stress
-  #   environment:
-  #     - REDIS_HOST=mini-redis-core
-  #     - REDIS_PORT=6380
-  #   networks:
-  #     - mini-redis-network
-  #   profiles:
-  #     - stress
-  #   command: ["node", "index.js", "stress", "--pool-size", "20"]
-
-  # mini-redis-benchmark-pubsub:
-  #   build:
-  #     context: ./services/mini-redis-benchmark
-  #     dockerfile: Dockerfile
-  #   container_name: mini-redis-benchmark-pubsub
-  #   environment:
-  #     - REDIS_HOST=mini-redis-core
-  #     - REDIS_PORT=6380
-  #   networks:
-  #     - mini-redis-network
-  #   profiles:
-  #     - pubsub
-  #   command: ["node", "index.js", "pubsub", "--pool-size", "15"]
-
-  # mini-redis-benchmark-all:
-  #   build:
-  #     context: ./services/mini-redis-benchmark
-  #     dockerfile: Dockerfile
-  #   container_name: mini-redis-benchmark-all
-  #   environment:
-  #     - REDIS_HOST=mini-redis-core
-  #     - REDIS_PORT=6380
-  #   networks:
-  #     - mini-redis-network
-  #   profiles:
-  #     - benchmark-all
-  #   command: ["node", "index.js", "all", "--pool-size", "25"]
 
   # ============================================================================
   # OFFICIAL MEMTIER BENCHMARK SERVICE - Redis Labs Benchmarking Tool
