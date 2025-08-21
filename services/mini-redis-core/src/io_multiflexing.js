@@ -13,13 +13,12 @@ class IOMultiplexer extends EventEmitter {
       batchSize: options.batchSize || 10, // Max messages to batch per flush
       batchTimeout: options.batchTimeout || 5, // Max ms to wait before flushing batch
       maxQueueSize: options.maxQueueSize || 1000, // Max queued messages per socket
-      priorityLevels: options.priorityLevels || 3, // Number of priority levels (0=highest)
       compressionThreshold: options.compressionThreshold || 1024, // Compress messages larger than this
       ...options,
     };
 
     // Core data structures
-    this.queues = new Map(); // socket -> { priority: [messages], normal: [messages], low: [messages] }
+    this.queues = new Map(); // socket -> { high: [messages], medium: [messages], low: [messages] }
     this.flushing = new WeakSet(); // sockets currently flushing
     this.batchTimers = new Map(); // socket -> timer for batch flushing
     this.socketMetrics = new Map(); // socket -> performance metrics
@@ -55,8 +54,8 @@ class IOMultiplexer extends EventEmitter {
 
     // Initialize priority queues for this socket
     this.queues.set(socket, {
-      priority: [], // High priority messages (system messages, errors)
-      normal: [], // Normal priority messages (regular pub/sub)
+      high: [], // High priority messages (system messages, errors)
+      medium: [], // Medium priority messages (regular pub/sub)
       low: [], // Low priority messages (metrics, heartbeats)
     });
 
@@ -104,7 +103,18 @@ class IOMultiplexer extends EventEmitter {
     this.emit("socketRegistered", socket, currentConnections);
   }
 
-  enqueue(socket, line, priority = "normal", options = {}) {
+  /**
+   * add message to queue by priority
+   * check queue size limits
+   * handle compression and chunking for large msg
+   * schedule batch flush
+   * @param {Socket} socket
+   * @param {string} line
+   * @param {string} priority | high | medium | low
+   * @param {object} options
+   * @returns {boolean}
+   */
+  enqueue(socket, line, priority = "medium", options = {}) {
     const queues = this.queues.get(socket);
     if (!queues) {
       // Socket not registered, drop message
@@ -116,10 +126,10 @@ class IOMultiplexer extends EventEmitter {
     const metrics = this.socketMetrics.get(socket);
 
     // Check queue size limits
-    const totalQueueSize = queues.priority.length + queues.normal.length + queues.low.length;
+    const totalQueueSize = queues.high.length + queues.medium.length + queues.low.length;
     if (totalQueueSize >= this.options.maxQueueSize) {
       // Queue is full, drop low priority messages first
-      if (priority === "low" || (priority === "normal" && queues.low.length > 0)) {
+      if (priority === "low" || (priority === "medium" && queues.low.length > 0)) {
         if (queues.low.length > 0) {
           queues.low.shift(); // Drop oldest low priority message
         } else {
@@ -128,8 +138,8 @@ class IOMultiplexer extends EventEmitter {
           this.emit("messageDropped", socket, line, "queue_full");
           return false;
         }
-      } else if (priority === "normal" && queues.normal.length > queues.priority.length * 2) {
-        queues.normal.shift(); // Drop oldest normal message if too many
+      } else if (priority === "medium" && queues.medium.length > queues.high.length * 2) {
+        queues.medium.shift(); // Drop oldest medium message if too many
       }
     }
 
@@ -229,18 +239,18 @@ class IOMultiplexer extends EventEmitter {
     }
 
     // Schedule batch flush or flush immediately based on priority
-    if (priority === "priority") {
+    if (priority === "high") {
       // High priority messages flush immediately
       this._flush(socket);
     } else {
-      // Normal and low priority messages can be batched
+      // Medium and low priority messages can be batched
       this._scheduleBatchFlush(socket);
     }
 
     return true;
   }
 
-  broadcast(sockets, line, priority = "normal", options = {}) {
+  broadcast(sockets, line, priority = "medium", options = {}) {
     const startTime = Date.now();
     let successCount = 0;
     let failureCount = 0;
@@ -280,13 +290,19 @@ class IOMultiplexer extends EventEmitter {
     return { successCount, failureCount };
   }
 
+  /** flush the message by priority
+   * Handler backpressure when socket buffer is full
+   * Update metrics and performance monitoring after flushing
+   *
+   * @param {Socket} socket
+   */
   _flush(socket) {
     if (this.flushing.has(socket)) return; // already flushing
 
     const queues = this.queues.get(socket);
     if (!queues) return;
 
-    const totalMessages = queues.priority.length + queues.normal.length + queues.low.length;
+    const totalMessages = queues.high.length + queues.medium.length + queues.low.length;
     if (totalMessages === 0) return;
 
     this.flushing.add(socket);
@@ -296,8 +312,8 @@ class IOMultiplexer extends EventEmitter {
     let bytesSent = 0;
 
     try {
-      // Process messages by priority: priority -> normal -> low
-      const priorityOrder = ["priority", "normal", "low"];
+      // Process messages by priority: high -> medium -> low
+      const priorityOrder = ["high", "medium", "low"];
 
       for (const priority of priorityOrder) {
         const queue = queues[priority];
@@ -308,21 +324,18 @@ class IOMultiplexer extends EventEmitter {
 
           // Decompress if needed
           if (message.compressed) {
-            // Decompress if needed
-            if (message.compressed) {
-              try {
-                // Remove the COMPRESSED: prefix if present
-                if (content.startsWith("COMPRESSED:")) {
-                  content = content.substring(11);
-                }
-                // Note: Current compression is lossy and cannot be decompressed
-                // Consider implementing proper compression with zlib
-              } catch (err) {
-                // Decompression failed, skip message
-                queue.shift();
-                this.globalMetrics.droppedMessages++;
-                continue;
+            try {
+              // Remove the COMPRESSED: prefix if present
+              if (content.startsWith("COMPRESSED:")) {
+                content = content.substring(11);
               }
+              // Note: Current compression is lossy and cannot be decompressed
+              // Consider implementing proper compression with zlib
+            } catch (err) {
+              // Decompression failed, skip message
+              queue.shift();
+              this.globalMetrics.droppedMessages++;
+              continue;
             }
           }
 
@@ -375,7 +388,7 @@ class IOMultiplexer extends EventEmitter {
     }
 
     // If there are still messages, they're waiting for backpressure to clear
-    const remainingMessages = queues.priority.length + queues.normal.length + queues.low.length;
+    const remainingMessages = queues.high.length + queues.medium.length + queues.low.length;
     if (remainingMessages > 0) {
       // Emit backpressure event for monitoring
       this.emit("backpressure", socket, remainingMessages);
@@ -386,7 +399,6 @@ class IOMultiplexer extends EventEmitter {
 
   _cleanup(socket) {
     // Clear batch timer
-    // Clear batch timer
     const timer = this.batchTimers.get(socket);
     if (timer) {
       clearTimeout(timer);
@@ -396,7 +408,6 @@ class IOMultiplexer extends EventEmitter {
     // Clean up data structures
     this.queues.delete(socket);
     this.flushing.delete(socket);
-    this.batchTimers.delete(socket);
     this.socketMetrics.delete(socket);
     this.connectionHealth.delete(socket);
 
@@ -407,7 +418,34 @@ class IOMultiplexer extends EventEmitter {
   queueSize(socket) {
     const queues = this.queues.get(socket);
     if (!queues) return 0;
-    return queues.priority.length + queues.normal.length + queues.low.length;
+    return queues.high.length + queues.medium.length + queues.low.length;
+  }
+
+  // Get detailed queue statistics by priority
+  getQueueStats(socket) {
+    const queues = this.queues.get(socket);
+    if (!queues) return null;
+
+    return {
+      high: queues.high.length,
+      medium: queues.medium.length,
+      low: queues.low.length,
+      total: queues.high.length + queues.medium.length + queues.low.length
+    };
+  }
+
+  // Get global queue statistics across all sockets
+  getGlobalQueueStats() {
+    const stats = { high: 0, medium: 0, low: 0, total: 0 };
+
+    for (const queues of this.queues.values()) {
+      stats.high += queues.high.length;
+      stats.medium += queues.medium.length;
+      stats.low += queues.low.length;
+    }
+
+    stats.total = stats.high + stats.medium + stats.low;
+    return stats;
   }
 
   getSocketMetrics(socket) {
@@ -524,7 +562,6 @@ class IOMultiplexer extends EventEmitter {
     const originalSize = Buffer.byteLength(line, "utf8");
     let processedMessage = line;
     let compressed = false;
-    let compressionSavings = 0;
 
     // Simple compression for large messages
     if (originalSize > this.options.compressionThreshold && !options.noCompression) {
@@ -533,7 +570,6 @@ class IOMultiplexer extends EventEmitter {
         if (simpleCompressed.length < originalSize * 0.8) {
           processedMessage = simpleCompressed;
           compressed = true;
-          compressionSavings = originalSize - simpleCompressed.length;
         }
       } catch (err) {
         // Compression failed, use original

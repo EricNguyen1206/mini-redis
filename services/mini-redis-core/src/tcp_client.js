@@ -20,7 +20,7 @@ class TCPClient {
     });
 
     // Register socket with the I/O multiplexer for efficient writes
-    if (server && server.mux) {
+    if (server?.mux) {
       server.mux.registerSocket(socket);
     }
   }
@@ -43,7 +43,7 @@ class TCPClient {
     }
 
     // Use the I/O multiplexer for efficient, non-blocking writes
-    if (this.server && this.server.mux) {
+    if (this.server?.mux) {
       this.server.mux.enqueue(this.socket, response);
     } else {
       // Fallback to direct write if multiplexer is not available

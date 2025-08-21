@@ -1,18 +1,4 @@
-# Mini-Redis Microservices Architecture
-# =====================================
-# This docker-compose file orchestrates the Mini-Redis microservices with maximum flexibility:
-#
-# STANDALONE DEPLOYMENT:
-# - mini-redis-core: Fully self-contained Redis-compatible server
-#
-# MONITORED DEPLOYMENT:
-# - mini-redis-core + mini-redis-insight: Redis server with web monitoring
-#
-# TESTING DEPLOYMENT:
-# - Add mini-redis-benchmark: Performance testing tools
-#
-# Each service can run independently and be added/removed without affecting others.
-
+# Mini-Redis Microservices
 services:
   # ============================================================================
   # CORE SERVICE - Fully Standalone Redis-Compatible Server
@@ -41,99 +27,92 @@ services:
       start_period: 10s
 
   # ============================================================================
-  # INSIGHT SERVICE - Optional Plug-and-Play Web Monitoring
+  # OFFICIAL REDISINSIGHT SERVICE - Redis Labs Web Monitoring Tool
   # ============================================================================
-  # This service is completely optional and can be added to any running core service.
-  # Provides web dashboard, real-time monitoring, and interactive command execution.
-  # Gracefully handles cases where core service is unavailable.
+  # Official Redis monitoring and management tool with web interface
+  # Provides comprehensive Redis database management and monitoring capabilities
 
-  mini-redis-insight:
-    build:
-      context: ./services/mini-redis-insight
-      dockerfile: Dockerfile
-    container_name: mini-redis-insight
+  redisinsight:
+    image: redislabs/redisinsight:latest
+    container_name: redisinsight
     ports:
-      - "8080:8080"  # Web interface port
-    environment:
-      - NODE_ENV=production
-      - HTTP_PORT=8080
-      - REDIS_HOST=mini-redis-core
-      - REDIS_PORT=6380
+      - "8080:5540"  # RedisInsight web interface port
+    volumes:
+      - redisinsight-data:/db
     networks:
       - mini-redis-network
-    # NO depends_on - can start independently and connect when core is available
     restart: unless-stopped
     profiles:
       - insight  # Optional service - only starts when explicitly requested
-    healthcheck:
-      test: ["CMD", "node", "-e", "const http = require('http'); const req = http.request('http://localhost:8080/', (res) => { process.exit(res.statusCode === 200 ? 0 : 1); }); req.on('error', () => process.exit(1)); req.end();"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
 
   # ============================================================================
-  # BENCHMARK SERVICES - Optional Performance Testing Tools
+  # OFFICIAL MEMTIER BENCHMARK SERVICE - Redis Labs Benchmarking Tool
   # ============================================================================
-  # These services are completely optional and can test any running core service.
-  # They will wait and retry if the core service is not immediately available.
+  # Official Redis benchmarking tool for performance testing
+  # Provides comprehensive Redis performance testing capabilities
 
-  mini-redis-benchmark:
-    build:
-      context: ./services/mini-redis-benchmark
-      dockerfile: Dockerfile
-    container_name: mini-redis-benchmark
-    environment:
-      - REDIS_HOST=mini-redis-core
-      - REDIS_PORT=6380
+  memtier-benchmark:
+    image: redislabs/memtier_benchmark:latest
+    container_name: memtier-benchmark
     networks:
       - mini-redis-network
-    # NO depends_on - benchmarks will handle connection retries internally
     profiles:
       - benchmark
-    command: ["node", "index.js", "basic"]
+    command: [
+      "--server=mini-redis-core",
+      "--port=6380",
+      "--protocol=redis",
+      "--clients=10",
+      "--threads=2",
+      "--requests=1000",
+      "--data-size=32",
+      "--key-pattern=R:R",
+      "--ratio=1:1",
+      "--print-percentiles=50,90,95,99"
+    ]
 
-  mini-redis-benchmark-stress:
-    build:
-      context: ./services/mini-redis-benchmark
-      dockerfile: Dockerfile
-    container_name: mini-redis-benchmark-stress
-    environment:
-      - REDIS_HOST=mini-redis-core
-      - REDIS_PORT=6380
+  # Stress test variant with higher load
+  memtier-benchmark-stress:
+    image: redislabs/memtier_benchmark:latest
+    container_name: memtier-benchmark-stress
     networks:
       - mini-redis-network
     profiles:
       - stress
-    command: ["node", "index.js", "stress", "--pool-size", "20"]
+    command: [
+      "--server=mini-redis-core",
+      "--port=6380",
+      "--protocol=redis",
+      "--clients=50",
+      "--threads=4",
+      "--requests=10000",
+      "--data-size=1024",
+      "--key-pattern=R:R",
+      "--ratio=1:1",
+      "--print-percentiles=50,90,95,99,99.9"
+    ]
 
-  mini-redis-benchmark-pubsub:
-    build:
-      context: ./services/mini-redis-benchmark
-      dockerfile: Dockerfile
-    container_name: mini-redis-benchmark-pubsub
-    environment:
-      - REDIS_HOST=mini-redis-core
-      - REDIS_PORT=6380
+  # Pipeline test variant
+  memtier-benchmark-pipeline:
+    image: redislabs/memtier_benchmark:latest
+    container_name: memtier-benchmark-pipeline
     networks:
       - mini-redis-network
     profiles:
-      - pubsub
-    command: ["node", "index.js", "pubsub", "--pool-size", "15"]
-
-  mini-redis-benchmark-all:
-    build:
-      context: ./services/mini-redis-benchmark
-      dockerfile: Dockerfile
-    container_name: mini-redis-benchmark-all
-    environment:
-      - REDIS_HOST=mini-redis-core
-      - REDIS_PORT=6380
-    networks:
-      - mini-redis-network
-    profiles:
-      - benchmark-all
-    command: ["node", "index.js", "all", "--pool-size", "25"]
+      - pipeline
+    command: [
+      "--server=mini-redis-core",
+      "--port=6380",
+      "--protocol=redis",
+      "--clients=20",
+      "--threads=2",
+      "--requests=5000",
+      "--data-size=64",
+      "--pipeline=10",
+      "--key-pattern=R:R",
+      "--ratio=1:1",
+      "--print-percentiles=50,90,95,99"
+    ]
 
   # Redis CLI for manual testing
   redis-cli:
@@ -155,4 +134,6 @@ networks:
 
 volumes:
   mini-redis-data:
+    driver: local
+  redisinsight-data:
     driver: local
