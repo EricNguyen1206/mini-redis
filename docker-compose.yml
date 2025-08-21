@@ -35,6 +35,7 @@ services:
   redisinsight:
     image: redislabs/redisinsight:latest
     container_name: redisinsight
+    platform: linux/arm64  # Native ARM64 support available
     ports:
       - "8080:5540"  # RedisInsight web interface port
     volumes:
@@ -50,10 +51,12 @@ services:
   # ============================================================================
   # Official Redis benchmarking tool for performance testing
   # Provides comprehensive Redis performance testing capabilities
+  # Note: Uses linux/amd64 emulation on ARM64 systems (Apple Silicon)
 
   memtier-benchmark:
     image: redislabs/memtier_benchmark:latest
     container_name: memtier-benchmark
+    platform: linux/amd64  # Required: ARM64 not supported, uses emulation
     networks:
       - mini-redis-network
     profiles:
@@ -75,6 +78,7 @@ services:
   memtier-benchmark-stress:
     image: redislabs/memtier_benchmark:latest
     container_name: memtier-benchmark-stress
+    platform: linux/amd64  # Required: ARM64 not supported, uses emulation
     networks:
       - mini-redis-network
     profiles:
@@ -96,6 +100,7 @@ services:
   memtier-benchmark-pipeline:
     image: redislabs/memtier_benchmark:latest
     container_name: memtier-benchmark-pipeline
+    platform: linux/amd64  # Required: ARM64 not supported, uses emulation
     networks:
       - mini-redis-network
     profiles:
@@ -118,6 +123,7 @@ services:
   redis-cli:
     image: redis:7-alpine
     container_name: redis-cli-client
+    platform: linux/arm64  # Native ARM64 support available
     depends_on:
       - mini-redis-core
     networks:

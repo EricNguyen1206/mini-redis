@@ -78,6 +78,8 @@ docker run -p 6380:6380 mini-redis-core
 
 # Or use docker-compose from project root
 docker-compose up
+
+# The redisinsight connection string: redis://mini-redis-core:6380
 ```
 
 ### Basic Usage Examples
